@@ -1,0 +1,31 @@
+{
+  "id": "/Bingo/",
+  "name": "빙고 땅따먹기 퀴즈",
+  "short_name": "빙고 퀴즈",
+  "description": "팀별로 문제를 맞히고 5×5 빙고판을 차지하는 팀 대항 퀴즈 게임",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fef3c7",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
