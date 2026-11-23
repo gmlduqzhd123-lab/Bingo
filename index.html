@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>빙고 땅따먹기 퀴즈 - 팀 대항 빙고 퀴즈 게임</title>
+<title>빙고 땅따먹기 퀴즈 - 1인 vs PC · 팀 대항 빙고 퀴즈 게임</title>
 <style>
 :root{
   --ink:#2b1d0e; --paper:#fffaf0; --gold:#ffc53d; --gold-d:#e08a00;
@@ -168,6 +168,7 @@ textarea.ed-field{font-weight:500;line-height:1.6;resize:vertical}
 .ed-status.warn{background:#ffe6e6;border-color:#e5484d}
 .ed-err{display:block;width:100%;text-align:left;background:rgba(255,255,255,.75);border:1px solid #e5484d;border-radius:7px;padding:4px 8px;margin-top:5px;font-size:13px;font-weight:700;color:#9f1239}
 .ed-err:hover{background:#fff}
+.ed-dup{display:block;width:100%;text-align:left;background:rgba(255,247,237,.9);border:1.5px solid #f59e0b;border-radius:7px;padding:4px 8px;margin-top:5px;font-size:13px;font-weight:700;color:#9a3412}
 .ed-preview{margin-top:8px;max-height:220px;overflow:auto;font-size:13.5px;border:2px solid #e3d5b3;border-radius:10px;background:#fff}
 .ed-preview div{padding:6px 10px;border-bottom:1px solid #f0e6cf;word-break:break-word}
 .ed-preview .tag{display:inline-block;font-size:11px;font-weight:800;padding:1px 6px;border-radius:6px;margin-right:6px;background:#9fd0ff}
@@ -290,6 +291,7 @@ textarea.ed-field{font-weight:500;line-height:1.6;resize:vertical}
 @keyframes floatUp{0%{opacity:0;transform:translateY(10px)}20%{opacity:1}100%{opacity:0;transform:translateY(-40px)}}
 .tcard.pop{animation:cardpop .4s}
 @keyframes cardpop{50%{transform:scale(1.1)}}
+.mob-scores{display:none}
 
 @media (max-width:900px){
   #screen-game{height:auto;min-height:100vh;overflow:visible}
@@ -305,6 +307,10 @@ textarea.ed-field{font-weight:500;line-height:1.6;resize:vertical}
   .tcard .meta{font-size:11.5px}
   .board-stage{--size:min(92vw,60vh)}
   .turn-banner{max-width:94vw;font-size:15px}
+  .mob-scores{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;max-width:94vw}
+  .ms-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:#fff;border:2.5px solid var(--c);font-size:12.5px;font-weight:900;box-shadow:0 2px 0 var(--d);white-space:nowrap}
+  .ms-chip.turn{background:#fff6cc;box-shadow:0 0 0 3px rgba(255,214,0,.8),0 2px 0 var(--d)}
+  .ms-chip .ms-sc{color:var(--d);font-size:14px}
 }
 @media (max-width:440px){
   .topbar{padding:0 8px;gap:5px}
@@ -525,7 +531,7 @@ body.reduce-motion .arena.shake-board{animation:none!important}
 <div class="ys-top"><button type="button" class="ys-chip" data-ys-install>📲 <span class="ys-wide">앱&nbsp;</span>설치</button><button type="button" class="ys-chip" data-qr aria-label="QR 코드로 접속">📱 QR</button></div>
   <div class="title-blocks" id="title-blocks"></div>
   <div class="logo">빙고 <span class="l2">땅따먹기</span><br>퀴즈</div>
-  <div class="subtitle">팀별로 문제를 맞히고 빙고판을 차지하세요!</div>
+  <div class="subtitle">혼자서 PC와 대결하거나 팀별로 빙고판을 차지하세요!</div>
   <div class="title-btns">
     <button class="pbtn gold big" id="btn-new">👥 팀 대결 (교실용)</button>
     <button class="pbtn ok big" id="btn-solo">🤖 1인 플레이 (vs PC)</button>
@@ -596,8 +602,9 @@ body.reduce-motion .arena.shake-board{animation:none!important}
         </div>
         <div class="panel">
           <h3>🎲 진행 · 카드 규칙</h3>
-          <div class="opt-row"><label>제한 시간<small>시간이 끝나면 객관식은 오답 처리</small></label><select data-opt="timer"><option value="0">없음</option><option value="15">15초</option><option value="20">20초</option><option value="30">30초</option><option value="60">60초</option></select></div>
+          <div class="opt-row"><label>제한 시간<small>시간이 끝나면 객관식·1인 주관식은 오답 처리</small></label><select data-opt="timer"><option value="0">없음</option><option value="15">15초</option><option value="20">20초</option><option value="30">30초</option><option value="60">60초</option></select></div>
           <div class="opt-row"><label>라운드 제한<small>모든 팀이 한 번씩 하면 1라운드</small></label><select data-opt="roundLimit"><option value="0">없음 (칸이 모두 열릴 때까지)</option><option value="4">4라운드</option><option value="6">6라운드</option><option value="8">8라운드</option><option value="10">10라운드</option><option value="12">12라운드</option></select></div>
+          <div class="opt-row"><label>목표 빙고 (먼저 승리)<small>지정한 줄 수를 먼저 완성하면 바로 게임 종료</small></label><select data-opt="bingoGoal"><option value="0">없음 (끝까지 대결)</option><option value="1">1줄 먼저 달성</option><option value="2">2줄 먼저 달성</option><option value="3">3줄 먼저 달성</option></select></div>
           <div class="opt-row"><label>틀렸을 때<small>틀린 칸을 어떻게 할까요?</small></label><select data-opt="wrongMode"><option value="keep">칸 그대로 (다른 팀이 다시 도전)</option><option value="reveal">정답 공개 후 빈 땅이 됨</option></select></div>
           <div class="opt-row"><label for="o-autonext">정답 후 자동 넘김<small>끄면 ‘다음으로’ 버튼을 눌러 설명 후 넘어가요</small></label><input type="checkbox" id="o-autonext" data-opt="autoNext"></div>
           <div class="opt-row"><label for="o-shuffle">문제 순서 섞기<small>끄면 1번 칸부터 문제 순서대로 놓여요</small></label><input type="checkbox" id="o-shuffle" data-opt="shuffle"></div>
@@ -660,6 +667,11 @@ body.reduce-motion .arena.shake-board{animation:none!important}
       <div class="panel">
         <h3>🗂️ 저장된 문제 세트</h3>
         <div class="set-list" id="set-list"></div>
+        <div class="ed-btns">
+          <button type="button" class="pbtn sm white" id="sets-backup">📦 전체 백업 (.json)</button>
+          <button type="button" class="pbtn sm white" id="sets-restore">📥 백업 불러오기</button>
+          <input type="file" id="sets-restore-file" accept=".json,application/json" class="hidden">
+        </div>
       </div>
       <div class="panel">
         <h3>🤖 AI에게 문제 만들기 부탁하기</h3>
@@ -715,6 +727,7 @@ body.reduce-motion .arena.shake-board{animation:none!important}
   <div class="arena" id="arena">
     <aside class="side left" id="side-left"></aside>
     <main class="board-wrap">
+      <div class="mob-scores" id="mob-scores" aria-label="팀 점수 요약"></div>
       <div class="turn-banner" id="banner"></div>
       <div class="board-stage" id="board-stage">
         <div class="board" id="board"></div>
@@ -766,7 +779,7 @@ const TEAM_PRESETS=[
 ];
 const EMOJIS=['🦊','🐳','🐸','🦄','🐯','🐼','🐰','🐻','🐧','🐙','🦁','🐲','🐱','🐶','🐥','🦖','🐨','🐝','🦉','🐹'];
 const DEFAULT_SETTINGS={
-  playMode:'team',aiLevel:'normal',teamCount:2,boardSize:5,tilePts:10,bingoPts:30,golden:3,timer:0,roundLimit:0,
+  playMode:'team',aiLevel:'normal',teamCount:2,boardSize:5,tilePts:10,bingoPts:30,golden:3,timer:0,roundLimit:0,bingoGoal:0,
   wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:true,
   autoNext:true,reachHint:true,theme:'forest',reduceMotion:false,setId:'sample'
 };
@@ -777,10 +790,10 @@ const AI_CONF={
 };
 const SOLO_MISSIONS=['기지개 5초 동안 크게 켜기!','박수 10번 빠르게 치기!','제자리에서 한 발로 5초 버티기!','오늘 배운 내용 한 가지를 소리 내어 말하기!','스스로에게 “잘하고 있어!” 크게 외치기!','손하트를 만들고 3초 웃기!'];
 const MODE_PRESETS=[
-  {id:'quick',label:'⚡ 10분 빠른 수업',desc:'4×4 · 20초 · 4라운드',vals:{boardSize:4,tilePts:10,bingoPts:30,golden:2,timer:20,roundLimit:4,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:false,autoNext:true}},
-  {id:'classic',label:'🎯 정석 빙고',desc:'5×5 · 무제한 · 모든 카드',vals:{boardSize:5,tilePts:10,bingoPts:30,golden:3,timer:0,roundLimit:0,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:true,autoNext:true}},
-  {id:'party',label:'🔥 대역전 파티',desc:'5×5 · 15초 · 황금5 · 빙고50',vals:{boardSize:5,tilePts:10,bingoPts:50,golden:5,timer:15,roundLimit:0,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:true,autoNext:true}},
-  {id:'review',label:'📚 차분한 복습',desc:'5×5 · 보상 OFF · 수동 넘김',vals:{boardSize:5,tilePts:10,bingoPts:30,golden:0,timer:0,roundLimit:0,wrongMode:'reveal',shuffle:true,rewards:false,penalties:false,strong:false,autoNext:false}}
+  {id:'quick',label:'⚡ 10분 빠른 수업',desc:'4×4 · 20초 · 4라운드',vals:{boardSize:4,tilePts:10,bingoPts:30,golden:2,timer:20,roundLimit:4,bingoGoal:0,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:false,autoNext:true}},
+  {id:'classic',label:'🎯 정석 빙고',desc:'5×5 · 무제한 · 모든 카드',vals:{boardSize:5,tilePts:10,bingoPts:30,golden:3,timer:0,roundLimit:0,bingoGoal:0,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:true,autoNext:true}},
+  {id:'party',label:'🔥 대역전 파티',desc:'5×5 · 15초 · 황금5 · 빙고50',vals:{boardSize:5,tilePts:10,bingoPts:50,golden:5,timer:15,roundLimit:0,bingoGoal:0,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:true,autoNext:true}},
+  {id:'review',label:'📚 차분한 복습',desc:'5×5 · 보상 OFF · 수동 넘김',vals:{boardSize:5,tilePts:10,bingoPts:30,golden:0,timer:0,roundLimit:0,bingoGoal:0,wrongMode:'reveal',shuffle:true,rewards:false,penalties:false,strong:false,autoNext:false}}
 ];
 
 const SAMPLE_TEXT=`우리나라의 수도는 어디일까요? | 서울 | 부산 | 대구 | 광주
@@ -1022,19 +1035,34 @@ function shakeBoard(){
 }
 
 /* ================= 모달 · 커스텀 확인창 ================= */
-let modalType=null,autoNextTimer=null,modalLastFocus=null;
+let modalType=null,autoNextTimer=null,modalLastFocus=null,modalOnClose=null;
 function clearAutoNext(){if(autoNextTimer){clearTimeout(autoNextTimer);autoNextTimer=null}}
-function openModal(html,size='',type='generic'){
+function trapTab(e,root){
+  if(!root)return;
+  const els=[...root.querySelectorAll('button:not(:disabled),[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')].filter(el=>el.offsetParent!==null);
+  if(!els.length)return;
+  const first=els[0],last=els[els.length-1],cur=document.activeElement;
+  if(!root.contains(cur)){e.preventDefault();first.focus();return}
+  if(e.shiftKey&&cur===first){e.preventDefault();last.focus()}
+  else if(!e.shiftKey&&cur===last){e.preventDefault();first.focus()}
+}
+function openModal(html,size='',type='generic',onClose=null){
   clearAutoNext();stopTimer();modalType=type;
+  modalOnClose=typeof onClose==='function'?onClose:null;
   if(!$('#modal').classList.contains('show'))modalLastFocus=document.activeElement;
   const b=$('#modal-box');b.className=size;b.innerHTML=html;$('#modal').classList.add('show');b.scrollTop=0;return b;
 }
 function closeModal(){
   clearAutoNext();stopTimer();modalType=null;
+  const cb=modalOnClose;modalOnClose=null;
   $('#modal').classList.remove('show');$('#modal-box').innerHTML='';
   if(modalLastFocus&&modalLastFocus.focus&&document.contains(modalLastFocus))modalLastFocus.focus();
   modalLastFocus=null;
+  if(cb)cb();
 }
+$('#modal').addEventListener('click',e=>{
+  if(e.target===$('#modal')&&(modalType==='info'||modalType==='manage'))closeModal();
+});
 
 let cfResolver=null,cfLastFocus=null;
 function confirmModal({title,desc='',okText='확인',cancelText='취소',danger=false}){
@@ -1136,10 +1164,11 @@ function parseQuestions(text){
   return {list,errors};
 }
 function serializeQuestions(list){
+  const clean=s=>String(s||'').replace(/\r?\n/g,' ').replace(/\|/g,'｜').trim();
   return list.map(item=>{
-    const cols=[item.q,item.a];
-    if(item.opts&&item.opts.length>1)cols.push(...item.opts.slice(1));
-    if(item.explain&&item.explain.trim())cols.push('해설: '+item.explain.trim());
+    const cols=[clean(item.q),clean(item.a)];
+    if(item.opts&&item.opts.length>1)cols.push(...item.opts.slice(1).map(clean).filter(Boolean));
+    if(item.explain&&item.explain.trim())cols.push('해설: '+clean(item.explain));
     return cols.join(' | ');
   }).join('\n');
 }
@@ -1463,7 +1492,7 @@ function renderSetup(){
     {n:5,label:'5×5 (25칸 · 기본)'}
   ].map(b=>`<button type="button" data-bsize="${b.n}" class="${nSide===b.n?'on':''}">${b.label}</button>`).join('');
   const themeNames={forest:'가을 숲',ocean:'바닷속',space:'우주',chalkboard:'칠판 다크'};
-  $('#adv-summary').textContent=`${st.tilePts}점·빙고${st.bingoPts}점 · ${st.rewards?'보상 ON':'보상 OFF'} · ${st.timer?st.timer+'초':'시간 무제한'} · ${themeNames[st.theme]||'가을 숲'}`;
+  $('#adv-summary').textContent=`${st.tilePts}점·빙고${st.bingoPts}점${st.bingoGoal?'·목표'+st.bingoGoal+'줄':''} · ${st.rewards?'보상 ON':'보상 OFF'} · ${st.timer?st.timer+'초':'시간 무제한'} · ${themeNames[st.theme]||'가을 숲'}`;
   $$('[data-opt]').forEach(el=>{const k=el.dataset.opt;if(el.type==='checkbox')el.checked=!!st[k];else el.value=String(st[k])});
   $('#o-penalties').disabled=!st.rewards;$('#o-strong').disabled=!st.rewards;
 }
@@ -1523,6 +1552,7 @@ function loadCardsFromText(){
     w1:x.opts&&x.opts[1]?x.opts[1]:'',
     w2:x.opts&&x.opts[2]?x.opts[2]:'',
     w3:x.opts&&x.opts[3]?x.opts[3]:'',
+    extraWrong:x.opts&&x.opts.length>4?x.opts.slice(4):[],
     explain:x.explain||''
   }));
 }
@@ -1536,7 +1566,9 @@ function renderCardEditor(){
     <div class="ed-card" data-ci="${idx}">
       <div class="ed-card-top">
         <b>#${idx+1}</b>
-        <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+          <button type="button" class="pbtn sm white" data-cmove="${idx}:-1" ${idx===0?'disabled':''} title="위로 이동">▲</button>
+          <button type="button" class="pbtn sm white" data-cmove="${idx}:1" ${idx===cardList.length-1?'disabled':''} title="아래로 이동">▼</button>
           <select data-cf="type"><option value="mc" ${c.isMc?'selected':''}>객관식</option><option value="sa" ${!c.isMc?'selected':''}>주관식</option></select>
           <button type="button" class="pbtn sm bad" data-cdel="${idx}" title="삭제">🗑️</button>
         </div>
@@ -1547,6 +1579,7 @@ function renderCardEditor(){
         <input data-cf="w1" value="${esc(c.w1)}" placeholder="오답 1">
         <input data-cf="w2" value="${esc(c.w2)}" placeholder="오답 2">
         <input data-cf="w3" value="${esc(c.w3)}" placeholder="오답 3">
+        ${(c.extraWrong||[]).map((w,j)=>`<input data-cex="${j}" value="${esc(w)}" placeholder="오답 ${j+4}">`).join('')}
       </div>`:''}
       <input data-cf="explain" value="${esc(c.explain)}" placeholder="해설 (선택)">
     </div>`).join('');
@@ -1554,16 +1587,23 @@ function renderCardEditor(){
 function syncCardsToText(){
   const valid=cardList.filter(c=>c.q.trim()&&c.a.trim()).map(c=>({
     q:c.q.trim(),a:c.a.trim(),
-    opts:c.isMc?[c.a.trim(),c.w1.trim(),c.w2.trim(),c.w3.trim()].filter(Boolean):null,
+    opts:c.isMc?[c.a.trim(),c.w1.trim(),c.w2.trim(),c.w3.trim(),...(c.extraWrong||[]).map(x=>x.trim())].filter(Boolean):null,
     explain:c.explain.trim()
   }));
   $('#ed-text').value=serializeQuestions(valid);
   updateEdStatus();
 }
 $('#ed-cards').addEventListener('input',e=>{
-  const card=e.target.closest('.ed-card'),f=e.target.dataset.cf;
-  if(!card||!f||f==='type')return;
-  cardList[+card.dataset.ci][f]=e.target.value;
+  const card=e.target.closest('.ed-card');if(!card)return;
+  const ci=+card.dataset.ci;
+  if(e.target.dataset.cex!=null){
+    cardList[ci].extraWrong=cardList[ci].extraWrong||[];
+    cardList[ci].extraWrong[+e.target.dataset.cex]=e.target.value;
+    syncCardsToText();return;
+  }
+  const f=e.target.dataset.cf;
+  if(!f||f==='type')return;
+  cardList[ci][f]=e.target.value;
   syncCardsToText();
 });
 $('#ed-cards').addEventListener('change',e=>{
@@ -1573,12 +1613,22 @@ $('#ed-cards').addEventListener('change',e=>{
   syncCardsToText();renderCardEditor();
 });
 $('#ed-cards').addEventListener('click',e=>{
+  const mv=e.target.closest('[data-cmove]');
+  if(mv){
+    const [idx,dir]=mv.dataset.cmove.split(':').map(Number);
+    const to=idx+dir;
+    if(to>=0&&to<cardList.length){
+      [cardList[idx],cardList[to]]=[cardList[to],cardList[idx]];
+      syncCardsToText();renderCardEditor();
+    }
+    return;
+  }
   const b=e.target.closest('[data-cdel]');if(!b)return;
   cardList.splice(+b.dataset.cdel,1);
   syncCardsToText();renderCardEditor();
 });
 $('#ed-add-card').onclick=()=>{
-  cardList.push({q:'',a:'',isMc:true,w1:'',w2:'',w3:'',explain:''});
+  cardList.push({q:'',a:'',isMc:true,w1:'',w2:'',w3:'',extraWrong:[],explain:''});
   renderCardEditor();
   const last=$('#ed-cards .ed-card:last-child input[data-cf="q"]');
   if(last){last.focus();last.scrollIntoView({block:'nearest'})}
@@ -1602,14 +1652,18 @@ function updateEdStatus(){
   const {list,errors}=parseQuestions($('#ed-text').value),st=$('#ed-status');
   const mc=list.filter(q=>q.opts).length;
   const nSide=setup.settings.boardSize===4?4:5,targetN=nSide*nSide;
+  const seen=new Map(),dups=[];
+  list.forEach((q,idx)=>{const k=q.q.toLowerCase().replace(/\s+/g,'');if(!k)return;if(seen.has(k))dups.push([seen.get(k),idx+1]);else seen.set(k,idx+1)});
   let h=list.length?`✅ 읽은 문제 <b>${list.length}개</b> (객관식 ${mc} · 주관식 ${list.length-mc})`:'아직 읽은 문제가 없어요. 형식에 맞춰 문제를 넣어 주세요.';
   if(list.length&&list.length<targetN)h+=` · ${targetN}개(${nSide}×${nSide})보다 적으면 남는 칸은 🍀 행운 칸이 돼요`;
+  if(dups.length)h+=`<div class="ed-dup">⚠️ 중복된 문제가 ${dups.length}개 있어요 (${dups.slice(0,3).map(d=>`${d[0]}번=${d[1]}번`).join(', ')}${dups.length>3?'…':''})</div>`;
   if(errors.length)h+=errors.slice(0,4).map(e=>`<button type="button" class="ed-err" data-line="${e.line}">⚠️ ${esc(e.msg)}</button>`).join('')+(errors.length>4?`<div style="margin-top:4px;font-size:12.5px">…외 ${errors.length-4}줄</div>`:'');
   st.innerHTML=h;st.classList.toggle('warn',!list.length||errors.length>0);
   $('#ed-preview').innerHTML=list.map((q,i)=>`<div><span class="tag ${q.opts?'':'s'}">${q.opts?'객관식':'주관식'}</span><b>${i+1}.</b> ${esc(q.q)} → <b>${esc(q.a)}</b>${q.opts?` <span style="color:#887">(오답: ${q.opts.slice(1).map(esc).join(', ')})</span>`:''}${q.explain?` <span style="color:#1e40af">[해설: ${esc(q.explain)}]</span>`:''}</div>`).join('');
   $('#ed-preview').classList.toggle('hidden',!list.length);
   refreshDirty();
 }
+window.addEventListener('beforeunload',e=>{if($('#screen-editor').classList.contains('active')&&isEdDirty()){e.preventDefault();e.returnValue=''}});
 $('#ed-status').addEventListener('click',e=>{
   const b=e.target.closest('.ed-err');if(!b)return;
   const line=+b.dataset.line;if(!line)return;
@@ -1684,6 +1738,47 @@ $('#ed-export').onclick=()=>{
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
 };
 $('#ed-import').onclick=()=>$('#ed-file').click();
+$('#sets-backup').onclick=()=>{
+  const sets=savedSets();
+  if(!sets.length){toast('백업할 저장된 문제 세트가 없어요');return}
+  const payload=JSON.stringify({app:'bingo-quiz',v:1,exportedAt:new Date().toISOString(),sets},null,2);
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([payload],{type:'application/json;charset=utf-8'}));a.download='빙고퀴즈_문제세트_백업.json';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+  toast(`📦 저장된 세트 ${sets.length}개를 백업했어요`);
+};
+function restoreSetsFromJson(rawJson){
+  const data=JSON.parse(rawJson);
+  const arr=Array.isArray(data)?data:(Array.isArray(data?.sets)?data.sets:null);
+  if(!arr)throw new Error('Invalid backup format');
+  const cur=savedSets();
+  const seen=new Set(cur.map(s=>s.name+'\0'+s.text));
+  const usedIds=new Set(cur.map(s=>s.id));
+  let added=0,skipped=0;
+  arr.forEach(item=>{
+    const name=typeof item?.name==='string'?item.name.trim().slice(0,30):'';
+    const text=typeof item?.text==='string'?item.text:'';
+    if(!name||!parseQuestions(text).list.length){skipped++;return}
+    const key=name+'\0'+text;
+    if(seen.has(key)){skipped++;return}
+    let id=typeof item.id==='string'&&item.id.startsWith('set_')&&!usedIds.has(item.id)?item.id:'set_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+    usedIds.add(id);seen.add(key);
+    cur.push({id,name,text});added++;
+  });
+  store('bq_sets',cur);renderSetList();
+  return {added,skipped,total:cur.length};
+}
+$('#sets-restore').onclick=()=>$('#sets-restore-file').click();
+$('#sets-restore-file').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const res=restoreSetsFromJson(String(r.result));
+      if(res.added){sfx('coin');toast(`📥 ${res.added}개 세트를 불러왔어요${res.skipped?` (중복·빈 항목 ${res.skipped}개 건너뜀)`:''}`)}
+      else toast('새로 추가할 문제 세트가 없어요');
+    }catch(err){toast('올바른 백업(.json) 파일이 아니에요')}
+  };
+  r.readAsText(f,'utf-8');e.target.value='';
+});
 let qrZoomLastFocus=null;
 function closeQrZoom(){
   const ov=$('#qr-zoom-overlay');if(!ov||!ov.classList.contains('show'))return;
@@ -1864,7 +1959,12 @@ function resumeGame(){
   show('game');render();
   if(!S.over&&S.teams[S.turn]?.isAI){scheduleAITurn();return}
   if(S.phase==='cards')showCards();
-  else if(S.phase&&S.phase.startsWith('team:'))pickTeam(REWARDS.find(r=>r.id===S.phase.slice(5)));
+  else if(S.phase&&S.phase.startsWith('team:')){
+    const r=REWARDS.find(x=>x.id===S.phase.slice(5));
+    if(r&&S.teams.length>2)pickTeam(r);
+    else if(r&&S.teams.length===2)applyTeamEffect(r,S.turn===0?1:0);
+    else{S.phase=null;render()}
+  }
 }
 
 /* ================= 렌더링 ================= */
@@ -1974,7 +2074,13 @@ function renderTeams(){
 function renderTop(){
   const scores=S.teams.map((_,k)=>score(k));
   const order=S.teams.map((_,k)=>k).sort((a,b)=>scores[b]-scores[a]);
-  $('#rankbar').innerHTML=order.map(k=>{const rank=1+scores.filter(s=>s>scores[k]).length;return `<div class="rk ${rank===1?'first':''}"><span class="e">${S.teams[k].emoji}</span>${rank}위</div>`}).join('');
+  const rank=k=>1+scores.filter(s=>s>scores[k]).length;
+  $('#rankbar').innerHTML=order.map(k=>{const r=rank(k);return `<div class="rk ${r===1?'first':''}"><span class="e">${S.teams[k].emoji}</span>${r}위</div>`}).join('');
+  const mob=$('#mob-scores');
+  if(mob)mob.innerHTML=order.map(k=>{
+    const t=S.teams[k],r=rank(k),b=bingoCount(k);
+    return `<span class="ms-chip${k===S.turn&&!S.over?' turn':''}" style="--c:${t.color};--d:${t.dark}">${r}위 ${t.emoji} ${esc(t.name)} <b class="ms-sc">${scores[k]}점</b>${b?` · 🎯${b}`:''}</span>`;
+  }).join('');
   const lim=S.settings.roundLimit;
   $('#round').innerHTML=`<b>${S.round}</b><span class="hide-sm">라운드</span><span class="show-sm-inline">R</span>${lim?` <span style="font-size:13px;opacity:.75">/ ${lim}</span>`:''}`;
   const showR=$('#round').querySelector('.show-sm-inline');if(showR)showR.style.display=window.innerWidth<=900?'inline':'none';
@@ -2068,7 +2174,8 @@ function openTeamManage(k){
     const dbl=$('#tm-dbl');dbl.textContent='✨ 2배: '+(t.double?'켜짐':'꺼짐');dbl.className='pbtn sm '+(t.double?'gold':'white');
   };
   box.querySelectorAll('[data-tadj]').forEach(b=>b.onclick=()=>{
-    const v=+b.dataset.tadj;t.bonus+=v;addLog(`선생님: ${t.name} ${v>0?'+':''}${v}점`);sfx(v>0?'coin':'click');render();syncView();
+    const actor=S.settings.playMode==='solo'?'수동 조정':'선생님';
+    const v=+b.dataset.tadj;t.bonus+=v;addLog(`${actor}: ${t.name} ${v>0?'+':''}${v}점`);sfx(v>0?'coin':'click');render();syncView();
   });
   box.querySelectorAll('[data-tstat]').forEach(b=>b.onclick=()=>{
     const [key,d]=b.dataset.tstat.split(':');t[key]=Math.max(0,Math.min(5,t[key]+Number(d)));sfx('click');render();syncView();
@@ -2076,8 +2183,9 @@ function openTeamManage(k){
   $('#tm-dbl').onclick=()=>{t.double=!t.double;sfx('click');render();syncView()};
   $('#tm-turn').onclick=()=>{
     if(!canTurn)return;
+    const actor=S.settings.playMode==='solo'?'수동 조정':'선생님';
     gameSession++;aiFocusTile=-1;
-    S.turn=k;addLog(`선생님: ${t.name} 차례로 변경`);sfx('turn');closeModal();render();toast(`▶ ${t.name} 차례로 바꿨어요`);
+    S.turn=k;addLog(`${actor}: ${t.name} 차례로 변경`);sfx('turn');closeModal();render();toast(`▶ ${t.name} 차례로 바꿨어요`);
     if(S.teams[S.turn]?.isAI)scheduleAITurn();
   };
   $('#m-close').onclick=closeModal;
@@ -2242,6 +2350,14 @@ function openQuestion(i){
   }
 }
 
+function checkBingoGoalWin(){
+  const goal=S&&S.settings&&+S.settings.bingoGoal;
+  if(!goal||S.over)return false;
+  const winners=S.teams.map((_,k)=>k).filter(k=>bingoCount(k)>=goal);
+  if(!winners.length)return false;
+  gameOver(`🎯 ${winners.map(k=>S.teams[k].name).join('·')} 빙고 ${goal}줄 달성!`);
+  return true;
+}
 async function resolveCorrect(i,lucky=false){
   const sid=gameSession,me=S.turn,tile=S.tiles[i],team=S.teams[me];
   tile.owner=me;tile.opened=true;S.lastTile=i;
@@ -2252,6 +2368,7 @@ async function resolveCorrect(i,lucky=false){
   if(tile.golden){sfx('gold');await announce('⭐ 황금 칸!',`${i+1}번 칸은 2칸만큼 점수가 돼요`,'gold');if(sid!==gameSession||!S||S.over)return}
   await checkBingo();
   if(sid!==gameSession||!S||S.over)return;
+  if(checkBingoGoalWin())return;
   if(S.settings.rewards)showCards();else endTurn();
 }
 function resolveWrong(i){
@@ -2281,7 +2398,7 @@ async function endTurn(){
   if(!S.tiles.some(t=>!t.opened)){render();await sleep(300);if(sid!==gameSession||!S||S.over)return;gameOver('모든 칸이 열렸어요');return}
   if(S.extra){S.extra=false;render();toast(`⏩ ${S.teams[S.turn].name} 한 번 더!`);sfx('turn');aiFastTurn=false;if(!S.over&&S.teams[S.turn]?.isAI)scheduleAITurn();return}
   const n=S.teams.length;
-  for(let guard=0;guard<n*3;guard++){
+  for(let guard=0;guard<n*6;guard++){
     S.turn=(S.turn+1)%n;
     if(S.turn===0){
       S.round++;
@@ -2627,6 +2744,7 @@ async function finishAction(){
   const sid=gameSession;
   S.pending=null;render();await checkBingo();
   if(sid!==gameSession||!S||S.over)return;
+  if(checkBingoGoalWin())return;
   endTurn();
 }
 
@@ -2757,7 +2875,7 @@ function openReviewModal(){
     </div>
     <div class="rev-list" id="rev-list"></div>
     <div class="m-actions">
-      ${missed.length?`<button type="button" class="pbtn ok" id="rev-retry">🎯 틀린 문제(${missed.length}개)로 복습 게임</button>`:''}
+      ${missed.length?`<button type="button" class="pbtn ok" id="rev-retry">🎯 틀린 문제(${missed.length}개)로 복습 게임</button><button type="button" class="pbtn blue" id="rev-save-set">💾 오답 세트로 저장</button><button type="button" class="pbtn white" id="rev-export-txt">⬇️ 오답 노트(.txt)</button>`:''}
       <button type="button" class="pbtn gold" id="m-close">닫기</button>
     </div>`,'wide','info');
   const draw=()=>{
@@ -2780,11 +2898,25 @@ function openReviewModal(){
   if($('#rev-retry'))$('#rev-retry').onclick=()=>{
     const prev=S;closeModal();ac();
     startGame({
-      settings:{...prev.settings,boardSize:missed.length>16?5:4,golden:Math.min(prev.settings.golden,2),roundLimit:0},
+      settings:{...prev.settings,boardSize:missed.length>16?5:4,golden:Math.min(prev.settings.golden,2),roundLimit:0,bingoGoal:0},
       customQuestions:missed.map(t=>({...t.q})),
       setName:`${prev.setName||'복습'} (오답 복습)`,
       teams:prev.teams.map(t=>({name:t.name,emoji:t.emoji,isAI:t.isAI,aiLevel:t.aiLevel}))
     });
+  };
+  if($('#rev-save-set'))$('#rev-save-set').onclick=()=>{
+    const txt=serializeQuestions(missed.map(t=>t.q));
+    const base=(S.setName||'복습').replace(/\s*\(오답 복습\)$/,'');
+    const name=(base+' 오답').slice(0,30);
+    const sets=savedSets();
+    if(!sets.some(s=>s.name===name&&s.text===txt)){sets.push({id:'set_'+Date.now().toString(36),name,text:txt});store('bq_sets',sets)}
+    sfx('coin');toast(`💾 “${name}” 세트로 저장했어요!`);
+  };
+  if($('#rev-export-txt'))$('#rev-export-txt').onclick=()=>{
+    const txt=serializeQuestions(missed.map(t=>t.q));
+    const safe=((S.setName||'복습').replace(/\s*\(오답 복습\)$/,'')||'오답노트').replace(/[\\/:*?"<>|]/g,'_');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain;charset=utf-8'}));a.download=safe+'_오답노트.txt';
+    document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
   };
   $('#m-close').onclick=closeModal;
   draw();
@@ -2798,7 +2930,7 @@ function howtoHTML(){
     <h4>1. 게임 시작 · 1인 플레이 & 팀 대결</h4>
     <ul><li>처음 화면에서 <b>🤖 1인 플레이 (vs PC)</b>를 누르면 PC(쉬움·보통·어려움)와 혼자서 1:1 대결을 바로 시작할 수 있고, 전적과 난이도 정복 배지가 저장돼요.</li>
     <li>1인 플레이에서는 주관식도 직접 입력해 자동 채점(필요 시 <b>정답 인정</b> 가능)하며, PC 차례에 <b>⏩ 빠르게</b>(<code>Space</code>)를 누르면 대기 시간을 바로 줄일 수 있어요.</li>
-    <li>팀 대결에서는 4×4 또는 5×5 빙고판에서 팀마다 차례대로 칸을 골라 문제를 풀어요. 세부 규칙은 <b>⚙️ 세부 설정 더보기</b>에서 바꿀 수 있어요.</li></ul>
+    <li>팀 대결에서는 4×4 또는 5×5 빙고판에서 팀마다 차례대로 칸을 골라 문제를 풀어요. 목표 빙고(1~3줄 먼저 완성 시 승리) 등 세부 규칙은 <b>⚙️ 세부 설정 더보기</b>에서 바꿀 수 있어요.</li></ul>
     <h4>2. 점수 계산 및 힌트</h4>
     <ul><li><b>총점 = 칸 점수 × 칸 수 + 빙고 점수 × 빙고 줄 수 + 보너스 점수</b></li>
     <li>빙고 줄이 완성되면 보드 위에 팀 색 선이 그어지고, 1칸만 남은 칸은 🔥로 표시돼요.</li>
@@ -2808,8 +2940,8 @@ function howtoHTML(){
     <h4>4. 선생님용 편의 기능 · 공유 · 단축키</h4>
     <ul><li>팀 카드 오른쪽 위의 <b>⚙️ 버튼</b>을 누르면 터치 화면에서도 점수·방패·얼음·차례를 바로 바꿀 수 있어요.</li>
     <li><b>💣 폭탄</b>은 1번 누르면 폭발 범위 미리보기, 한 번 더 누르거나 상단 버튼을 누르면 발사돼요.</li>
-    <li>문제 세트 편집기에서 <b>| 구분</b>·<b>엑셀/시트 복사</b>를 모두 지원하고, <b>🔗 QR·링크 공유</b>로 학생 기기에 바로 전달해 1인 복습하게 할 수 있어요.</li>
-    <li>게임이 끝난 뒤 <b>📝 오답 복습</b>에서 틀린 문제만 모아 보고, <b>🎯 복습 게임</b>으로 틀린 문제만으로 다시 대결할 수 있어요.</li>
+    <li>문제 세트 편집기에서 <b>| 구분</b>·<b>엑셀/시트 복사</b>·전체 <b>백업/복원(.json)</b>을 지원하고, <b>🔗 QR·링크 공유</b>로 학생 기기에 바로 전달해 1인 복습하게 할 수 있어요.</li>
+    <li>게임이 끝난 뒤 <b>📝 오답 복습</b>에서 틀린 문제만 모아 보고, <b>🎯 복습 게임</b>·<b>💾 오답 세트 저장</b>·<b>⬇️ 오답 노트(.txt)</b>로 이어서 활용할 수 있어요.</li>
     <li>키보드 단축키: 객관식 <code>1~4</code> · 주관식 <code>Space</code>(정답 보기)/<code>O</code>/<code>X</code> · 타이머 일시정지 <code>P</code> · +10초 <code>+</code> · 되돌리기 <code>Z</code> · 전체화면 <code>F</code></li></ul>
     <div class="m-actions"><button class="pbtn gold" id="m-close">닫기</button></div></div>`;
 }
@@ -2848,6 +2980,11 @@ document.addEventListener('click',e=>{
 });
 
 document.addEventListener('keydown',e=>{
+  if(e.key==='Tab'){
+    if($('#qr-zoom-overlay').classList.contains('show')){trapTab(e,$('#qr-zoom-overlay'));return}
+    if($('#confirm-modal').classList.contains('show')){trapTab(e,$('#confirm-modal .cf-box'));return}
+    if($('#modal').classList.contains('show')){trapTab(e,$('#modal-box'));return}
+  }
   if($('#qr-zoom-overlay').classList.contains('show')){
     if(e.key==='Escape'){e.preventDefault();closeQrZoom()}
     return;
@@ -2871,7 +3008,7 @@ document.addEventListener('keydown',e=>{
 
   if($('#modal').classList.contains('show')){
     const aiTurn=!!(S&&S.teams[S.turn]&&S.teams[S.turn].isAI);
-    if(aiTurn){
+    if(aiTurn&&modalType!=='info'&&modalType!=='manage'){
       if(e.key===' '||e.key==='Enter'){const sk=$('#ai-skip');if(sk){e.preventDefault();sk.click()}}
       return;
     }
@@ -2938,14 +3075,14 @@ $('#btn-start').onclick=async()=>{
 };
 $('#board').addEventListener('click',e=>{const b=e.target.closest('.tile');if(b)pickTile(+b.dataset.i)});
 $('#board').addEventListener('mouseover',e=>{
-  if(!S||!S.pending||S.pending.type!=='bomb')return;
+  if(isPCBusyTurn()||!S||!S.pending||S.pending.type!=='bomb')return;
   const N=boardN(),b=e.target.closest('.tile.target');
   if(!b)return;
   $$('.tile.blast').forEach(x=>x.classList.remove('blast'));
   const i=+b.dataset.i;[i,...neighbors(i,N)].forEach(k=>{const el=$(`.tile[data-i="${k}"]`);if(el)el.classList.add('blast')});
 });
 $('#board').addEventListener('mouseleave',()=>{
-  if(!S||!S.pending||S.pending.type!=='bomb')return;
+  if(isPCBusyTurn()||!S||!S.pending||S.pending.type!=='bomb')return;
   $$('.tile.blast').forEach(x=>x.classList.remove('blast'));
   if(S.pending.aim!=null){
     const N=boardN();
@@ -2966,7 +3103,8 @@ $('#arena').addEventListener('click',e=>{
     sfx('click');openTeamManage(+mg.dataset.manage);return;
   }
   const b=e.target.closest('[data-adj]');if(!b||!S)return;
-  const k=+b.dataset.adj,v=+b.dataset.v;S.teams[k].bonus+=v;addLog(`선생님: ${S.teams[k].name} ${v>0?'+':''}${v}점`);sfx(v>0?'coin':'click');render();
+  const actor=S.settings.playMode==='solo'?'수동 조정':'선생님';
+  const k=+b.dataset.adj,v=+b.dataset.v;S.teams[k].bonus+=v;addLog(`${actor}: ${S.teams[k].name} ${v>0?'+':''}${v}점`);sfx(v>0?'coin':'click');render();
 });
 $('#g-home').onclick=async()=>{
   if(await confirmModal({title:'처음 화면으로 갈까요?',desc:'게임은 자동 저장되어 ‘이어하기’로 계속할 수 있어요.'})){gameSession++;aiFocusTile=-1;if(annFinish)annFinish();closeModal();show('title')}
@@ -2988,7 +3126,7 @@ $('#g-log').onclick=()=>{
 $('#g-help').onclick=openHowto;
 $('#g-end').onclick=async()=>{
   if(busy)return;
-  if(await confirmModal({title:'지금 점수로 게임을 끝낼까요?',desc:'최종 결과 화면으로 이동합니다.',okText:'끝내기',danger:true}))gameOver('선생님이 게임을 마쳤어요');
+  if(await confirmModal({title:'지금 점수로 게임을 끝낼까요?',desc:'최종 결과 화면으로 이동합니다.',okText:'끝내기',danger:true}))gameOver(S&&S.settings.playMode==='solo'?'게임을 마쳤어요':'선생님이 게임을 마쳤어요');
 };
 $('#r-again').onclick=()=>{
   ac();
@@ -3044,6 +3182,10 @@ async function checkSharedHash(){
     };
     const wasInGame=$('#screen-game').classList.contains('active');
     if(wasInGame){gameSession++;aiFocusTile=-1}
+    let skipResume=false;
+    const resumePausedPC=()=>{
+      if(!skipResume&&wasInGame&&$('#screen-game').classList.contains('active')&&S&&!S.over&&S.teams[S.turn]?.isAI)scheduleAITurn();
+    };
     openModal(`
       <p class="m-title">📦 공유된 문제 세트</p>
       <p class="m-desc" style="font-weight:800;margin-bottom:6px">“${esc(name)}”</p>
@@ -3052,11 +3194,9 @@ async function checkSharedHash(){
         <button type="button" class="pbtn ok big" id="sh-solo">🤖 저장하고 1인 플레이 (vs PC)</button>
         <button type="button" class="pbtn gold" id="sh-save">💾 내 문제 세트에 저장</button>
         <button type="button" class="pbtn white" id="m-close">닫기</button>
-      </div>`,'narrow','info');
-    const resumePausedPC=()=>{
-      if(wasInGame&&$('#screen-game').classList.contains('active')&&S&&!S.over&&S.teams[S.turn]?.isAI)scheduleAITurn();
-    };
+      </div>`,'narrow','info',resumePausedPC);
     $('#sh-solo').onclick=()=>{
+      skipResume=true;
       const id=saveShared();closeModal();
       setup.settings.playMode='solo';setup.settings.setId=id;
       if(parsed.length<=16)setup.settings.boardSize=4;
@@ -3068,9 +3208,8 @@ async function checkSharedHash(){
       toast(`💾 “${name}” 세트를 저장했어요`);
       if($('#screen-editor').classList.contains('active'))renderSetList();
       if($('#screen-setup').classList.contains('active'))renderSetup();
-      resumePausedPC();
     };
-    $('#m-close').onclick=()=>{closeModal();resumePausedPC()};
+    $('#m-close').onclick=closeModal;
   }catch(e){toast('공유 링크가 손상되었거나 지원되지 않아요')}
 }
 if(AU.bgm){
