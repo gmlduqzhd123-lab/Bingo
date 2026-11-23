@@ -2,7 +2,7 @@
   "id": "/Bingo/",
   "name": "빙고 땅따먹기 퀴즈",
   "short_name": "빙고 퀴즈",
-  "description": "팀별로 문제를 맞히고 5×5 빙고판을 차지하는 팀 대항 퀴즈 게임",
+  "description": "혼자서 PC와 대결하거나 팀별로 문제를 맞히고 4×4·5×5 빙고판을 차지하는 퀴즈 게임",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
