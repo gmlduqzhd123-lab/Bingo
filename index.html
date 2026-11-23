@@ -107,14 +107,27 @@ body[data-theme="ocean"] .ys-credit{color:#f8fafc;opacity:.92;text-shadow:0 1px 
 .preset-btn b{font-size:15.5px}
 .preset-btn small{font-size:12.5px;color:#5c4d38;font-weight:700}
 
-.setup-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;width:min(1240px,100%);align-items:start}
+.setup-essential{width:min(760px,100%);display:flex;flex-direction:column;gap:14px}
+.ess-block{border-bottom:2px dashed #e3d5b3;padding-bottom:14px}
+.ess-block:last-child{border-bottom:none;padding-bottom:0}
+.ess-block h3{margin:0 0 10px;font-size:18px;display:flex;align-items:center;gap:6px}
+.solo-sub{margin-top:10px;background:#fffdf6;border:2px solid #e3d5b3;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.solo-ai-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.solo-ai-row > label{font-weight:800;font-size:15px}
+.vs-pc-pill{flex:none;padding:8px 12px;border-radius:11px;border:3px solid #2f7de1;background:#e8f2ff;color:#1b4f99;font-weight:900;font-size:15px;white-space:nowrap}
+.adv-wrap{width:min(980px,100%);display:flex;flex-direction:column;gap:14px;align-items:center}
+.adv-toggle{width:min(760px,100%);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border:3px solid var(--ink);border-radius:13px;background:rgba(255,250,240,.95);padding:11px 16px;font-weight:800;font-size:15.5px;box-shadow:0 4px 0 var(--ink);text-align:left}
+.adv-toggle:hover{background:#fff6d6}
+.adv-summary{font-size:13px;color:#6b583e;font-weight:700;flex:1;text-align:right;min-width:140px}
+#adv-panel{width:100%;display:flex;flex-direction:column;gap:14px}
+.adv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:16px;width:100%;align-items:start}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
-.seg button{border:3px solid var(--ink);background:#fff;border-radius:9px;padding:7px 16px;font-weight:800;font-size:16px}
+.seg button{border:3px solid var(--ink);background:#fff;border-radius:9px;padding:7px 14px;font-weight:800;font-size:15.5px}
 .seg button.on{background:var(--gold);box-shadow:inset 0 -3px 0 rgba(0,0,0,.2)}
 .team-row{display:flex;gap:8px;align-items:center;margin:10px 0}
-.team-row .emo{font-size:30px;width:56px;height:56px;border:4px solid var(--c);border-radius:13px;background:#fff;flex:none;line-height:1;transition:transform .1s}
+.team-row .emo{font-size:30px;width:54px;height:54px;border:4px solid var(--c);border-radius:13px;background:#fff;flex:none;line-height:1;transition:transform .1s}
 .team-row .emo:hover{transform:scale(1.06)}
-.team-row input{flex:1;min-width:0;font-size:18px;padding:11px 12px;border:3px solid var(--c);border-radius:11px;font-weight:800;background:#fff}
+.team-row input{flex:1;min-width:0;font-size:18px;padding:10px 12px;border:3px solid var(--c);border-radius:11px;font-weight:800;background:#fff}
 .team-row .dot{width:18px;height:18px;border-radius:50%;background:var(--c);border:2px solid var(--ink);flex:none}
 .hint{font-size:13px;color:#7a6a50;margin:6px 0 0;line-height:1.5}
 .opt-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dashed #d9c9a3;gap:12px}
@@ -244,6 +257,7 @@ textarea.ed-field{font-weight:500;line-height:1.6;resize:vertical}
 .tile.target{animation:pulse .9s ease-in-out infinite;cursor:pointer;opacity:1;filter:none}
 .tile.dim{opacity:.3;filter:grayscale(.7)}
 .tile.picked{opacity:1;filter:none;transform:scale(1.09);outline:5px dashed #fff;outline-offset:2px}
+.tile.ai-focus{outline:5px solid #38bdf8;outline-offset:2px;transform:scale(1.07);box-shadow:0 0 0 6px rgba(56,189,248,.4),inset 0 -7px 0 var(--s),inset 0 6px 0 var(--h),0 8px 0 rgba(0,0,0,.3);z-index:2}
 .tile.blast{box-shadow:0 0 0 5px #ff3b30,0 0 18px #ff3b30!important;transform:scale(1.06)}
 .tile.boom{animation:boom .6s}
 @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 #fff}50%{transform:scale(1.07);box-shadow:0 0 0 5px #fff,0 0 18px #fff}}
@@ -263,6 +277,7 @@ textarea.ed-field{font-weight:500;line-height:1.6;resize:vertical}
 .tcard .meta{grid-column:1/-1;font-size:13px;color:#5c4d38;display:flex;justify-content:space-between;font-weight:700;margin-top:4px;border-top:2px dashed #eadfc7;padding-top:5px;gap:4px}
 .tcard .st{grid-column:1/-1;min-height:20px;font-size:14px;font-weight:800;display:flex;gap:5px;flex-wrap:wrap}
 .tcard .st span{background:#f4efe4;border-radius:7px;padding:0 6px}
+.tcard .st .ai-badge{background:#dbeafe;color:#1e40af;border:1.5px solid #60a5fa}
 .tcard.turn{transform:scale(1.06);box-shadow:0 0 0 6px rgba(255,214,0,.85),0 6px 0 var(--d)}
 .tcard.turn::before{content:"▶ 지금 차례";position:absolute;top:-15px;left:12px;background:var(--c);color:#fff;font-size:12px;font-weight:900;padding:2px 10px;border-radius:999px;border:2px solid var(--ink)}
 .tcard-manage{position:absolute;top:6px;right:6px;width:28px;height:28px;border:2px solid var(--ink);border-radius:8px;background:#fffaf0;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;box-shadow:0 2px 0 var(--ink)}
@@ -494,6 +509,7 @@ body.reduce-motion .arena.shake-board{animation:none!important}
   <div class="subtitle">팀별로 문제를 맞히고 빙고판을 차지하세요!</div>
   <div class="title-btns">
     <button class="pbtn gold big" id="btn-new">▶ 새 게임</button>
+    <button class="pbtn ok big" id="btn-solo">🤖 1인 플레이 (vs PC)</button>
     <button class="pbtn blue big hidden" id="btn-continue"></button>
     <button class="pbtn white" id="btn-editor">📝 문제 세트 만들기 · AI 프롬프트</button>
     <button class="pbtn white" id="btn-howto">❓ 게임 방법</button>
@@ -508,45 +524,69 @@ body.reduce-motion .arena.shake-board{animation:none!important}
     <h2 class="page-title outline">⚙️ 게임 설정</h2>
     <button class="pbtn white" id="btn-howto2">❓ 게임 방법</button>
   </div>
-  <div class="preset-bar" id="preset-bar"></div>
-  <div class="setup-grid">
-    <div class="panel">
-      <h3>👥 팀 설정</h3>
-      <div class="seg" id="team-count"></div>
-      <div id="team-rows"></div>
-      <p class="hint">동물 버튼을 누르면 원하는 캐릭터를 바로 고를 수 있어요. 팀 이름은 8글자까지 쓸 수 있어요.</p>
-      <h3 style="margin-top:18px">🎨 화면 · 접근성</h3>
-      <div class="opt-row"><label>배경 테마<small>수업 분위기나 교실 조명에 맞춰 고르세요</small></label><select data-opt="theme"><option value="forest">🍂 가을 숲</option><option value="ocean">🌊 바닷속</option><option value="space">🚀 우주</option><option value="chalkboard">🖍️ 칠판 다크</option></select></div>
-      <div class="opt-row"><label for="o-reach">빙고 직전 힌트<small>1칸만 남으면 빙고 되는 칸을 🔥로 표시</small></label><input type="checkbox" id="o-reach" data-opt="reachHint"></div>
-      <div class="opt-row"><label for="o-motion">애니메이션 줄이기<small>반짝임·흔들림 효과를 끄고 차분하게 진행</small></label><input type="checkbox" id="o-motion" data-opt="reduceMotion"></div>
+  <div class="panel setup-essential">
+    <div class="ess-block">
+      <h3>👥 플레이 방식</h3>
+      <div class="seg" id="play-mode"></div>
+      <div id="solo-box" class="solo-sub hidden">
+        <div class="solo-ai-row">
+          <label>🤖 PC 난이도</label>
+          <div class="seg" id="ai-level"></div>
+        </div>
+        <div id="solo-row"></div>
+      </div>
+      <div id="team-box">
+        <div id="team-rows"></div>
+        <p class="hint">동물 버튼을 누르면 캐릭터를 고를 수 있어요. 팀 이름은 8글자까지 쓸 수 있어요.</p>
+      </div>
     </div>
-    <div class="panel">
+    <div class="ess-block">
       <h3>📚 문제 세트</h3>
       <select id="set-select"></select>
       <div class="set-info" id="set-info"></div>
       <div class="ed-btns">
-        <button class="pbtn sm white" id="btn-editor2">📝 문제 세트 만들기 · 고치기</button>
+        <button type="button" class="pbtn sm white" id="btn-editor2">📝 문제 세트 만들기 · 고치기</button>
       </div>
-      <h3 style="margin-top:18px">🎯 보드 · 점수 규칙</h3>
-      <div class="opt-row"><label>빙고판 크기<small>짧은 수업엔 4×4(16칸)을 추천해요</small></label><select data-opt="boardSize"><option value="5">5×5 (25칸)</option><option value="4">4×4 (16칸)</option></select></div>
-      <div class="opt-row"><label>칸 점수<small>문제를 맞혀 칸을 차지하면 얻는 점수</small></label><select data-opt="tilePts"><option value="5">5점</option><option value="10">10점</option><option value="20">20점</option></select></div>
-      <div class="opt-row"><label>빙고 점수<small>가로·세로·대각선 한 줄을 모두 차지하면</small></label><select data-opt="bingoPts"><option value="20">20점</option><option value="30">30점</option><option value="50">50점</option><option value="100">100점</option></select></div>
-      <div class="opt-row"><label>황금 칸<small>숨겨진 칸 · 열면 2칸만큼 점수</small></label><select data-opt="golden"><option value="0">없음</option><option value="2">2개</option><option value="3">3개</option><option value="5">5개</option></select></div>
     </div>
-    <div class="panel">
-      <h3>🎲 진행 방식</h3>
-      <div class="opt-row"><label>제한 시간<small>시간이 끝나면 객관식은 오답 처리</small></label><select data-opt="timer"><option value="0">없음</option><option value="15">15초</option><option value="20">20초</option><option value="30">30초</option><option value="60">60초</option></select></div>
-      <div class="opt-row"><label>라운드 제한<small>모든 팀이 한 번씩 하면 1라운드</small></label><select data-opt="roundLimit"><option value="0">없음 (칸이 모두 열릴 때까지)</option><option value="4">4라운드</option><option value="6">6라운드</option><option value="8">8라운드</option><option value="10">10라운드</option><option value="12">12라운드</option></select></div>
-      <div class="opt-row"><label>틀렸을 때<small>틀린 칸을 어떻게 할까요?</small></label><select data-opt="wrongMode"><option value="keep">칸 그대로 (다른 팀이 다시 도전)</option><option value="reveal">정답 공개 후 빈 땅이 됨</option></select></div>
-      <div class="opt-row"><label for="o-autonext">정답 후 자동 넘김<small>끄면 ‘다음으로’ 버튼을 눌러 설명 후 넘어가요</small></label><input type="checkbox" id="o-autonext" data-opt="autoNext"></div>
-      <div class="opt-row"><label for="o-shuffle">문제 순서 섞기<small>끄면 1번 칸부터 문제 순서대로 놓여요</small></label><input type="checkbox" id="o-shuffle" data-opt="shuffle"></div>
-      <div class="opt-row"><label for="o-rewards">보상 카드<small>정답을 맞히면 카드 3장 중 1장 뽑기</small></label><input type="checkbox" id="o-rewards" data-opt="rewards"></div>
-      <div class="opt-row"><label for="o-penalties">벌칙 카드 섞기<small>꽝, 점수 -10, 지진, 벌칙 미션 등</small></label><input type="checkbox" id="o-penalties" data-opt="penalties"></div>
-      <div class="opt-row"><label for="o-strong">강력 카드 섞기<small>💣 폭탄, 🔀 점수 체인지 (역전이 쉬워져요)</small></label><input type="checkbox" id="o-strong" data-opt="strong"></div>
+    <div class="ess-block">
+      <h3>🎯 빙고판 크기</h3>
+      <div class="seg" id="board-size-seg"></div>
     </div>
   </div>
   <div class="start-row">
     <button class="pbtn gold big" id="btn-start">🚩 게임 시작!</button>
+  </div>
+  <div class="adv-wrap">
+    <button type="button" class="adv-toggle" id="btn-adv" aria-expanded="false">
+      <span>⚙️ 세부 설정 더보기</span>
+      <span class="adv-summary" id="adv-summary"></span>
+      <span id="adv-arrow">▾</span>
+    </button>
+    <div id="adv-panel" class="hidden">
+      <div class="preset-bar" id="preset-bar"></div>
+      <div class="adv-grid">
+        <div class="panel">
+          <h3>🎯 점수 · 화면</h3>
+          <div class="opt-row"><label>칸 점수<small>문제를 맞혀 칸을 차지하면 얻는 점수</small></label><select data-opt="tilePts"><option value="5">5점</option><option value="10">10점</option><option value="20">20점</option></select></div>
+          <div class="opt-row"><label>빙고 점수<small>가로·세로·대각선 한 줄을 모두 차지하면</small></label><select data-opt="bingoPts"><option value="20">20점</option><option value="30">30점</option><option value="50">50점</option><option value="100">100점</option></select></div>
+          <div class="opt-row"><label>황금 칸<small>숨겨진 칸 · 열면 2칸만큼 점수</small></label><select data-opt="golden"><option value="0">없음</option><option value="2">2개</option><option value="3">3개</option><option value="5">5개</option></select></div>
+          <div class="opt-row"><label>배경 테마<small>수업 분위기나 교실 조명에 맞춰 고르세요</small></label><select data-opt="theme"><option value="forest">🍂 가을 숲</option><option value="ocean">🌊 바닷속</option><option value="space">🚀 우주</option><option value="chalkboard">🖍️ 칠판 다크</option></select></div>
+          <div class="opt-row"><label for="o-reach">빙고 직전 힌트<small>1칸만 남으면 빙고 되는 칸을 🔥로 표시</small></label><input type="checkbox" id="o-reach" data-opt="reachHint"></div>
+          <div class="opt-row"><label for="o-motion">애니메이션 줄이기<small>반짝임·흔들림 효과를 끄고 차분하게 진행</small></label><input type="checkbox" id="o-motion" data-opt="reduceMotion"></div>
+        </div>
+        <div class="panel">
+          <h3>🎲 진행 · 카드 규칙</h3>
+          <div class="opt-row"><label>제한 시간<small>시간이 끝나면 객관식은 오답 처리</small></label><select data-opt="timer"><option value="0">없음</option><option value="15">15초</option><option value="20">20초</option><option value="30">30초</option><option value="60">60초</option></select></div>
+          <div class="opt-row"><label>라운드 제한<small>모든 팀이 한 번씩 하면 1라운드</small></label><select data-opt="roundLimit"><option value="0">없음 (칸이 모두 열릴 때까지)</option><option value="4">4라운드</option><option value="6">6라운드</option><option value="8">8라운드</option><option value="10">10라운드</option><option value="12">12라운드</option></select></div>
+          <div class="opt-row"><label>틀렸을 때<small>틀린 칸을 어떻게 할까요?</small></label><select data-opt="wrongMode"><option value="keep">칸 그대로 (다른 팀이 다시 도전)</option><option value="reveal">정답 공개 후 빈 땅이 됨</option></select></div>
+          <div class="opt-row"><label for="o-autonext">정답 후 자동 넘김<small>끄면 ‘다음으로’ 버튼을 눌러 설명 후 넘어가요</small></label><input type="checkbox" id="o-autonext" data-opt="autoNext"></div>
+          <div class="opt-row"><label for="o-shuffle">문제 순서 섞기<small>끄면 1번 칸부터 문제 순서대로 놓여요</small></label><input type="checkbox" id="o-shuffle" data-opt="shuffle"></div>
+          <div class="opt-row"><label for="o-rewards">보상 카드<small>정답을 맞히면 카드 3장 중 1장 뽑기</small></label><input type="checkbox" id="o-rewards" data-opt="rewards"></div>
+          <div class="opt-row"><label for="o-penalties">벌칙 카드 섞기<small>꽝, 점수 -10, 지진, 벌칙 미션 등</small></label><input type="checkbox" id="o-penalties" data-opt="penalties"></div>
+          <div class="opt-row"><label for="o-strong">강력 카드 섞기<small>💣 폭탄, 🔀 점수 체인지 (역전이 쉬워져요)</small></label><input type="checkbox" id="o-strong" data-opt="strong"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -664,7 +704,7 @@ body.reduce-motion .arena.shake-board{animation:none!important}
 
 <!-- ===== 결과 ===== -->
 <section id="screen-result" class="screen">
-  <div class="logo" style="font-size:clamp(38px,6vw,70px)">🏆 최종 결과</div>
+  <div class="logo" id="res-headline" style="font-size:clamp(28px,6vw,68px);text-align:center;word-break:keep-all;max-width:96vw">🏆 최종 결과</div>
   <div class="podium" id="podium"></div>
   <div class="res-table-wrap"><table class="res-table" id="res-table"></table></div>
   <div class="start-row">
@@ -701,10 +741,16 @@ const TEAM_PRESETS=[
 ];
 const EMOJIS=['🦊','🐳','🐸','🦄','🐯','🐼','🐰','🐻','🐧','🐙','🦁','🐲','🐱','🐶','🐥','🦖','🐨','🐝','🦉','🐹'];
 const DEFAULT_SETTINGS={
-  teamCount:2,boardSize:5,tilePts:10,bingoPts:30,golden:3,timer:0,roundLimit:0,
+  playMode:'team',aiLevel:'normal',teamCount:2,boardSize:5,tilePts:10,bingoPts:30,golden:3,timer:0,roundLimit:0,
   wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:true,
   autoNext:true,reachHint:true,theme:'forest',reduceMotion:false,setId:'sample'
 };
+const AI_CONF={
+  easy:{label:'쉬움',acc:.55,tileSmart:.35,cardSmart:.5},
+  normal:{label:'보통',acc:.75,tileSmart:.8,cardSmart:.85},
+  hard:{label:'어려움',acc:.9,tileSmart:1,cardSmart:1}
+};
+const SOLO_MISSIONS=['기지개 5초 동안 크게 켜기!','박수 10번 빠르게 치기!','제자리에서 한 발로 5초 버티기!','오늘 배운 내용 한 가지를 소리 내어 말하기!','스스로에게 “잘하고 있어!” 크게 외치기!','손하트를 만들고 3초 웃기!'];
 const MODE_PRESETS=[
   {id:'quick',label:'⚡ 10분 빠른 수업',desc:'4×4 · 20초 · 4라운드',vals:{boardSize:4,tilePts:10,bingoPts:30,golden:2,timer:20,roundLimit:4,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:false,autoNext:true}},
   {id:'classic',label:'🎯 정석 빙고',desc:'5×5 · 무제한 · 모든 카드',vals:{boardSize:5,tilePts:10,bingoPts:30,golden:3,timer:0,roundLimit:0,wrongMode:'keep',shuffle:true,rewards:true,penalties:true,strong:true,autoNext:true}},
@@ -965,7 +1011,8 @@ function getSet(id){return allSets().find(s=>s.id===id)||allSets()[0]}
 
 /* ================= 설정 화면 ================= */
 let setup=load('bq_setup',null);
-if(!setup||!Array.isArray(setup.teams))setup={teams:TEAM_PRESETS.map(t=>({name:t.name,emoji:t.emoji})),settings:{...DEFAULT_SETTINGS}};
+if(!setup||!Array.isArray(setup.teams))setup={teams:TEAM_PRESETS.map(t=>({name:t.name,emoji:t.emoji})),solo:{name:'나',emoji:'🦊'},settings:{...DEFAULT_SETTINGS}};
+if(!setup.solo||typeof setup.solo!=='object')setup.solo={name:'나',emoji:'🦊'};
 setup.settings={...DEFAULT_SETTINGS,...setup.settings};
 function saveSetup(){store('bq_setup',setup)}
 
@@ -975,18 +1022,29 @@ function isPresetMatch(p){
 function renderPresets(){
   $('#preset-bar').innerHTML=MODE_PRESETS.map(p=>`<button type="button" class="preset-btn ${isPresetMatch(p)?'on':''}" data-preset="${p.id}"><b>${p.label}</b><small>${p.desc}</small></button>`).join('');
 }
+function setAdvOpen(open){
+  $('#adv-panel').classList.toggle('hidden',!open);
+  $('#btn-adv').setAttribute('aria-expanded',String(!!open));
+  $('#adv-arrow').textContent=open?'▴':'▾';
+}
+$('#btn-adv').onclick=()=>{sfx('click');setAdvOpen($('#adv-panel').classList.contains('hidden'))};
 
-let emoTargetIdx=-1;
-function closeEmoPicker(){emoTargetIdx=-1;$('#emo-picker').classList.remove('show')}
+let emoTargetIdx=null;
+function closeEmoPicker(){emoTargetIdx=null;$('#emo-picker').classList.remove('show')}
 function openEmoPicker(k,btn){
   if(emoTargetIdx===k&&$('#emo-picker').classList.contains('show')){closeEmoPicker();return}
   emoTargetIdx=k;
-  const activeTeams=setup.teams.slice(0,setup.settings.teamCount);
   const pk=$('#emo-picker');
-  pk.innerHTML=`<div class="emo-grid">${EMOJIS.map(e=>{
-    const owner=activeTeams.findIndex(t=>t.emoji===e);
-    return `<button type="button" class="emo-opt ${owner===k?'cur':''}" data-pickemo="${e}" title="${owner>=0?`${owner+1}팀 사용 중 (누르면 서로 바꿈)`:'선택'}">${e}${owner>=0&&owner!==k?`<span class="used-tag">${owner+1}</span>`:''}</button>`;
-  }).join('')}</div>`;
+  if(k==='solo'){
+    const cur=setup.solo.emoji||'🦊';
+    pk.innerHTML=`<div class="emo-grid">${EMOJIS.map(e=>`<button type="button" class="emo-opt ${e===cur?'cur':''}" data-pickemo="${e}">${e}</button>`).join('')}</div>`;
+  }else{
+    const activeTeams=setup.teams.slice(0,setup.settings.teamCount);
+    pk.innerHTML=`<div class="emo-grid">${EMOJIS.map(e=>{
+      const owner=activeTeams.findIndex(t=>t.emoji===e);
+      return `<button type="button" class="emo-opt ${owner===k?'cur':''}" data-pickemo="${e}" title="${owner>=0?`${owner+1}팀 사용 중 (누르면 서로 바꿈)`:'선택'}">${e}${owner>=0&&owner!==k?`<span class="used-tag">${owner+1}</span>`:''}</button>`;
+    }).join('')}</div>`;
+  }
   pk.classList.add('show');
   const r=btn.getBoundingClientRect(),w=pk.offsetWidth||280,h=pk.offsetHeight||210;
   const left=Math.max(8,Math.min(window.innerWidth-w-8,r.left));
@@ -994,11 +1052,14 @@ function openEmoPicker(k,btn){
   pk.style.left=left+'px';pk.style.top=top+'px';
 }
 $('#emo-picker').addEventListener('click',e=>{
-  const b=e.target.closest('[data-pickemo]');if(!b||emoTargetIdx<0)return;
+  const b=e.target.closest('[data-pickemo]');if(!b||emoTargetIdx==null)return;
   const chosen=b.dataset.pickemo,k=emoTargetIdx;
-  const other=setup.teams.slice(0,setup.settings.teamCount).findIndex((t,idx)=>idx!==k&&t.emoji===chosen);
-  if(other>=0)setup.teams[other].emoji=setup.teams[k].emoji;
-  setup.teams[k].emoji=chosen;
+  if(k==='solo'){setup.solo.emoji=chosen}
+  else{
+    const other=setup.teams.slice(0,setup.settings.teamCount).findIndex((t,idx)=>idx!==k&&t.emoji===chosen);
+    if(other>=0)setup.teams[other].emoji=setup.teams[k].emoji;
+    setup.teams[k].emoji=chosen;
+  }
   sfx('click');saveSetup();closeEmoPicker();renderSetup();
 });
 document.addEventListener('click',e=>{
@@ -1009,13 +1070,38 @@ function renderSetup(){
   const st=setup.settings;
   applyTheme(st.theme);applyMotion(st.reduceMotion);
   renderPresets();
-  $('#team-count').innerHTML=[2,3,4].map(n=>`<button data-n="${n}" class="${st.teamCount===n?'on':''}">${n}팀</button>`).join('');
-  $('#team-rows').innerHTML=setup.teams.slice(0,st.teamCount).map((t,k)=>`
-    <div class="team-row" style="--c:${TEAM_PRESETS[k].color}">
-      <span class="dot"></span>
-      <button type="button" class="emo" data-emo="${k}" title="캐릭터 고르기">${t.emoji}</button>
-      <input data-tname="${k}" maxlength="8" value="${esc(t.name)}" placeholder="${TEAM_PRESETS[k].name}">
-    </div>`).join('');
+  const isSolo=st.playMode==='solo';
+  $('#play-mode').innerHTML=[
+    {id:'solo',label:'🤖 1인 vs PC'},
+    {id:'team2',label:'👥 2팀'},
+    {id:'team3',label:'👥 3팀'},
+    {id:'team4',label:'👥 4팀'}
+  ].map(m=>{
+    const on=m.id==='solo'?isSolo:(!isSolo&&st.teamCount===+m.id.slice(4));
+    return `<button type="button" data-mode="${m.id}" class="${on?'on':''}">${m.label}</button>`;
+  }).join('');
+  $('#solo-box').classList.toggle('hidden',!isSolo);
+  $('#team-box').classList.toggle('hidden',isSolo);
+  if(isSolo){
+    $('#ai-level').innerHTML=[
+      {id:'easy',label:'🌱 쉬움'},
+      {id:'normal',label:'⚡ 보통'},
+      {id:'hard',label:'🔥 어려움'}
+    ].map(l=>`<button type="button" data-ailevel="${l.id}" class="${st.aiLevel===l.id?'on':''}">${l.label}</button>`).join('');
+    $('#solo-row').innerHTML=`
+      <div class="team-row" style="--c:${TEAM_PRESETS[0].color}">
+        <button type="button" class="emo" data-emo="solo" title="캐릭터 고르기">${setup.solo.emoji||'🦊'}</button>
+        <input data-soloname maxlength="8" value="${esc(setup.solo.name)}" placeholder="나">
+        <span class="vs-pc-pill">VS 🤖 PC</span>
+      </div>`;
+  }else{
+    $('#team-rows').innerHTML=setup.teams.slice(0,st.teamCount).map((t,k)=>`
+      <div class="team-row" style="--c:${TEAM_PRESETS[k].color}">
+        <span class="dot"></span>
+        <button type="button" class="emo" data-emo="${k}" title="캐릭터 고르기">${t.emoji}</button>
+        <input data-tname="${k}" maxlength="8" value="${esc(t.name)}" placeholder="${TEAM_PRESETS[k].name}">
+      </div>`).join('');
+  }
   const sets=allSets();
   if(!sets.some(s=>s.id===st.setId))st.setId='sample';
   $('#set-select').innerHTML=sets.map(s=>`<option value="${esc(s.id)}" ${s.id===st.setId?'selected':''}>${esc(s.name)}</option>`).join('');
@@ -1028,6 +1114,12 @@ function renderSetup(){
   else if(p.length<total)html+=`<br>⚠️ ${total}문제보다 적어요. 남는 <b>${total-p.length}칸</b>은 문제 없이 바로 차지하는 🍀 행운 칸이 돼요.`;
   else html+=`<br>딱 ${total}칸에 맞아요! 👍`;
   info.innerHTML=html;
+  $('#board-size-seg').innerHTML=[
+    {n:4,label:'4×4 (16칸 · 빠름)'},
+    {n:5,label:'5×5 (25칸 · 기본)'}
+  ].map(b=>`<button type="button" data-bsize="${b.n}" class="${nSide===b.n?'on':''}">${b.label}</button>`).join('');
+  const themeNames={forest:'가을 숲',ocean:'바닷속',space:'우주',chalkboard:'칠판 다크'};
+  $('#adv-summary').textContent=`${st.tilePts}점·빙고${st.bingoPts}점 · ${st.rewards?'보상 ON':'보상 OFF'} · ${st.timer?st.timer+'초':'시간 무제한'} · ${themeNames[st.theme]||'가을 숲'}`;
   $$('[data-opt]').forEach(el=>{const k=el.dataset.opt;if(el.type==='checkbox')el.checked=!!st[k];else el.value=String(st[k])});
   $('#o-penalties').disabled=!st.rewards;$('#o-strong').disabled=!st.rewards;
 }
@@ -1036,7 +1128,23 @@ $('#preset-bar').addEventListener('click',e=>{
   const p=MODE_PRESETS.find(x=>x.id===b.dataset.preset);if(!p)return;
   sfx('click');Object.assign(setup.settings,p.vals);saveSetup();renderSetup();toast(`${p.label} 설정을 적용했어요`);
 });
-$('#team-count').addEventListener('click',e=>{const b=e.target.closest('[data-n]');if(!b)return;sfx('click');setup.settings.teamCount=+b.dataset.n;saveSetup();closeEmoPicker();renderSetup()});
+$('#play-mode').addEventListener('click',e=>{
+  const b=e.target.closest('[data-mode]');if(!b)return;
+  sfx('click');const m=b.dataset.mode;
+  if(m==='solo'){setup.settings.playMode='solo'}
+  else{setup.settings.playMode='team';setup.settings.teamCount=+m.slice(4)}
+  saveSetup();closeEmoPicker();renderSetup();
+});
+$('#ai-level').addEventListener('click',e=>{
+  const b=e.target.closest('[data-ailevel]');if(!b)return;
+  sfx('click');setup.settings.aiLevel=b.dataset.ailevel;saveSetup();renderSetup();
+});
+$('#board-size-seg').addEventListener('click',e=>{
+  const b=e.target.closest('[data-bsize]');if(!b)return;
+  sfx('click');setup.settings.boardSize=+b.dataset.bsize;saveSetup();renderSetup();
+});
+$('#solo-row').addEventListener('click',e=>{const b=e.target.closest('[data-emo]');if(!b)return;sfx('click');openEmoPicker('solo',b)});
+$('#solo-row').addEventListener('input',e=>{if(!e.target.hasAttribute('data-soloname'))return;setup.solo.name=e.target.value;saveSetup()});
 $('#team-rows').addEventListener('click',e=>{
   const b=e.target.closest('[data-emo]');if(!b)return;sfx('click');openEmoPicker(+b.dataset.emo,b);
 });
@@ -1267,7 +1375,10 @@ $('#p-copy').onclick=async()=>{
 };
 
 /* ================= 게임 상태 ================= */
-let S=null,undoStack=[],lastScores=null;
+let S=null,undoStack=[],lastScores=null,gameSession=0,aiFocusTile=-1;
+const aiWait=(ms,reduced)=>sleep(isReducedMotion()?reduced:ms);
+const isAISessionAlive=sid=>sid===gameSession&&!!S&&!S.over&&$('#screen-game').classList.contains('active')&&!!(S.teams[S.turn]&&S.teams[S.turn].isAI);
+async function waitConfirmClear(sid){while($('#confirm-modal').classList.contains('show')&&sid===gameSession)await sleep(80)}
 function emptyStats(){return {correct:0,wrong:0,shieldsBlocked:0,lucky:0,steals:0,maxBingo:0}}
 function save(){if(S)store('bq_save',S)}
 function lineOwners(){return getLines(boardN()).map(l=>{const o=S.tiles[l[0]].owner;return o>=0&&l.every(i=>S.tiles[i].owner===o)?o:-1})}
@@ -1280,35 +1391,41 @@ function score(t){
 }
 function teamTag(t){const tm=S.teams[t];return `${tm.emoji} ${esc(tm.name)}`}
 function addLog(msg){S.log.push(`[${S.round}R] ${msg}`);if(S.log.length>300)S.log.shift()}
-function pushUndo(){undoStack.push(JSON.stringify(S));if(undoStack.length>40)undoStack.shift()}
+function pushUndo(){if(!S||S.teams[S.turn]?.isAI)return;undoStack.push(JSON.stringify(S));if(undoStack.length>40)undoStack.shift()}
 
 function startGame(){
-  const st={...setup.settings},N=st.boardSize===4?4:5,total=N*N;
+  gameSession++;aiFocusTile=-1;
+  const st={...setup.settings},N=st.boardSize===4?4:5,total=N*N,isSolo=st.playMode==='solo';
   const parsed=parseQuestions(getSet(st.setId).text).list;
   let qs=[...parsed];if(st.shuffle)shuffle(qs);qs=qs.slice(0,total);
   const tiles=Array.from({length:total},(_,i)=>({q:qs[i]||null,owner:-1,opened:false,golden:false,fails:0}));
   shuffle([...Array(total).keys()]).slice(0,Math.min(total,st.golden)).forEach(i=>tiles[i].golden=true);
-  S={v:2,size:N,
-    teams:setup.teams.slice(0,st.teamCount).map((t,k)=>({
-      name:(t.name||'').trim()||TEAM_PRESETS[k].name,emoji:t.emoji,
-      color:TEAM_PRESETS[k].color,dark:TEAM_PRESETS[k].dark,light:TEAM_PRESETS[k].light,
-      bonus:0,shield:0,freeze:0,double:false,stats:emptyStats()
-    })),
-    tiles,turn:0,round:1,settings:st,lineOwners:Array(2*N+2).fill(-1),
+  const teams=isSolo?[
+    {name:(setup.solo.name||'').trim()||'나',emoji:setup.solo.emoji||'🦊',color:TEAM_PRESETS[0].color,dark:TEAM_PRESETS[0].dark,light:TEAM_PRESETS[0].light,bonus:0,shield:0,freeze:0,double:false,isAI:false,stats:emptyStats()},
+    {name:'PC',emoji:'🤖',color:TEAM_PRESETS[1].color,dark:TEAM_PRESETS[1].dark,light:TEAM_PRESETS[1].light,bonus:0,shield:0,freeze:0,double:false,isAI:true,aiLevel:st.aiLevel||'normal',stats:emptyStats()}
+  ]:setup.teams.slice(0,st.teamCount).map((t,k)=>({
+    name:(t.name||'').trim()||TEAM_PRESETS[k].name,emoji:t.emoji,
+    color:TEAM_PRESETS[k].color,dark:TEAM_PRESETS[k].dark,light:TEAM_PRESETS[k].light,
+    bonus:0,shield:0,freeze:0,double:false,isAI:false,stats:emptyStats()
+  }));
+  S={v:2,size:N,teams,tiles,turn:0,round:1,settings:st,lineOwners:Array(2*N+2).fill(-1),
     pending:null,phase:null,extra:false,lastTile:-1,log:[],over:false,setName:getSet(st.setId).name};
   undoStack=[];lastScores=null;
   applyTheme(st.theme);applyMotion(st.reduceMotion);
   show('game');render();sfx('fanfare');
-  announce('게임 시작!',`${teamTag(0)} 팀부터 시작해요`,'',1800);
+  announce(isSolo?'🤖 PC와 대결!':'게임 시작!',isSolo?`${teamTag(0)}부터 시작해요 (${(AI_CONF[st.aiLevel]||AI_CONF.normal).label})`:`${teamTag(0)} 팀부터 시작해요`,'',1800);
 }
 function resumeGame(){
   S=load('bq_save',null);if(!S||!Array.isArray(S.tiles)||!S.teams)return;
+  gameSession++;aiFocusTile=-1;
   S.size=S.size||Math.round(Math.sqrt(S.tiles.length))||5;
   S.settings={...DEFAULT_SETTINGS,...(S.settings||{}),boardSize:S.size};
+  if(!S.settings.playMode)S.settings.playMode=S.teams.some(t=>t.isAI)?'solo':'team';
   S.teams.forEach((t,k)=>{
     const p=TEAM_PRESETS[k%TEAM_PRESETS.length];
     t.color=t.color||p.color;t.dark=t.dark||p.dark;t.light=t.light||p.light;
     t.bonus=Number(t.bonus)||0;t.shield=Number(t.shield)||0;t.freeze=Number(t.freeze)||0;t.double=!!t.double;
+    t.isAI=!!t.isAI;if(t.isAI)t.aiLevel=t.aiLevel||S.settings.aiLevel||'normal';
     t.stats={...emptyStats(),...(t.stats||{})};
   });
   const lLen=getLines(S.size).length;
@@ -1317,6 +1434,7 @@ function resumeGame(){
   undoStack=[];lastScores=null;
   applyTheme(S.settings.theme);applyMotion(S.settings.reduceMotion);
   show('game');render();
+  if(!S.over&&S.teams[S.turn]?.isAI){scheduleAITurn();return}
   if(S.phase==='cards')showCards();
   else if(S.phase&&S.phase.startsWith('team:'))pickTeam(REWARDS.find(r=>r.id===S.phase.slice(5)));
 }
@@ -1388,6 +1506,7 @@ function renderBoard(){
     if(reach.has(i)){cls+=' reach';style+=`;--rc:${S.teams[reach.get(i)].color}`}
     if(tg)cls+=tg.has(i)?' target':' dim';
     if(S.pending&&((S.pending.type==='swap'&&S.pending.first===i)||(S.pending.type==='bomb'&&S.pending.aim===i)))cls+=' picked';
+    if(i===aiFocusTile)cls+=' ai-focus';
     if(bombAim&&bombAim.has(i))cls+=' blast';
     const label=t.owner>=0?`${i+1}번 ${S.teams[t.owner].name} 땅`:t.opened?`${i+1}번 빈 땅`:`${i+1}번 문제`;
     return `<button class="${cls}" data-i="${i}" style="${style}" aria-label="${esc(label)}"><span class="tnum">${i+1}</span>`+
@@ -1406,6 +1525,7 @@ function renderTeams(){
     el.className='tcard'+(k===S.turn&&!S.over?' turn':'');
     el.style.cssText=`--c:${t.color};--d:${t.dark}`;
     const st=[];
+    if(t.isAI)st.push(`<span class="ai-badge">🤖 AI · ${(AI_CONF[t.aiLevel||'normal']||AI_CONF.normal).label}</span>`);
     if(t.shield)st.push(`<span title="방패">🛡️×${t.shield}</span>`);
     if(t.freeze)st.push(`<span title="얼음">❄️ 쉬기${t.freeze>1?'×'+t.freeze:''}</span>`);
     if(t.double)st.push('<span title="2배 찬스">✨2배</span>');
@@ -1444,6 +1564,12 @@ function renderBanner(){
   b.style.setProperty('--c',t.color);b.classList.toggle('pending',!!S.pending);
   if(S.over){
     b.innerHTML=`<span>🏁 게임이 끝났어요!</span><button type="button" class="pbtn sm gold" id="go-result">🏆 결과 다시 보기</button>`;
+    return;
+  }
+  if(t.isAI){
+    const left=S.tiles.filter(x=>!x.opened).length;
+    const msg=S.pending?'🤖 PC가 카드 효과를 사용하는 중...':'🤖 PC가 도전할 칸을 고르고 있어요...';
+    b.innerHTML=`<span class="b-e">${t.emoji}</span><span><b>${esc(t.name)}</b> · ${msg}</span><span style="font-size:.82em;color:#7a6a50">남은 칸 ${left}</span>`;
     return;
   }
   if(S.pending){
@@ -1520,14 +1646,16 @@ function openTeamManage(k){
   $('#tm-dbl').onclick=()=>{t.double=!t.double;sfx('click');render();syncView()};
   $('#tm-turn').onclick=()=>{
     if(!canTurn)return;
+    gameSession++;aiFocusTile=-1;
     S.turn=k;addLog(`선생님: ${t.name} 차례로 변경`);sfx('turn');closeModal();render();toast(`▶ ${t.name} 차례로 바꿨어요`);
+    if(S.teams[S.turn]?.isAI)scheduleAITurn();
   };
   $('#m-close').onclick=closeModal;
 }
 
 /* ================= 게임 진행 ================= */
 function pickTile(i){
-  if(busy||!S||S.over||$('#modal').classList.contains('show'))return;
+  if(busy||!S||S.over||$('#modal').classList.contains('show')||S.teams[S.turn]?.isAI)return;
   if(S.pending){handleTarget(i);return}
   const t=S.tiles[i];
   if(t.opened){toast(t.owner>=0?`이미 ${S.teams[t.owner].name}의 땅이에요`:'빈 땅은 🚩땅따먹기 카드로만 차지할 수 있어요');return}
@@ -1683,32 +1811,206 @@ async function endTurn(){
     break;
   }
   render();sfx('turn');
+  if(!S.over&&S.teams[S.turn]?.isAI)scheduleAITurn();
 }
 async function gameOver(reason){
+  gameSession++;aiFocusTile=-1;
   S.over=true;S.pending=null;S.phase=null;closeModal();render();
   sfx('fanfare');await announce('🏁 게임 끝!',reason,'',2000);
   showResult();
 }
 
+/* ---------- 1인 플레이 PC AI ---------- */
+function scoreTileForAI(i,me){
+  const N=boardN(),lines=getLines(N);
+  let pts=0;
+  lines.forEach(line=>{
+    if(!line.includes(i))return;
+    let aiCnt=0,oppCnt=0;
+    line.forEach(idx=>{
+      const o=S.tiles[idx].owner;
+      if(o===me)aiCnt++;else if(o>=0)oppCnt++;
+    });
+    if(oppCnt===0){pts+=aiCnt===N-1?1000:20+aiCnt*25}
+    else if(aiCnt===0){pts+=oppCnt===N-1?700:10+oppCnt*15}
+  });
+  const r=i/N|0,c=i%N,mid=(N-1)/2;
+  pts+=Math.max(0,4-(Math.abs(r-mid)+Math.abs(c-mid)));
+  return pts;
+}
+function chooseAITile(level){
+  const me=S.turn,open=S.tiles.map((t,i)=>t.opened?-1:i).filter(i=>i>=0);
+  if(!open.length)return -1;
+  const conf=AI_CONF[level]||AI_CONF.normal;
+  const scored=open.map(i=>({i,s:scoreTileForAI(i,me)+Math.random()*2})).sort((a,b)=>b.s-a.s);
+  if(Math.random()<conf.tileSmart){
+    if(level==='normal'&&scored[0].s<700){const top=scored.slice(0,Math.min(3,scored.length));return pick(top).i}
+    return scored[0].i;
+  }
+  return pick(open);
+}
+function scheduleAITurn(){
+  const sid=gameSession;
+  setTimeout(()=>{if(isAISessionAlive(sid))runAITurn(sid)},isReducedMotion()?120:260);
+}
+async function runAITurn(sid){
+  while(busy&&sid===gameSession)await sleep(80);
+  await waitConfirmClear(sid);
+  if(!isAISessionAlive(sid))return;
+  if(S.phase==='cards'){showCards();return}
+  if(S.phase&&S.phase.startsWith('team:')){
+    const r=REWARDS.find(x=>x.id===S.phase.slice(5));
+    if(r)await applyTeamEffect(r,0);else finishAction();
+    return;
+  }
+  if(S.pending){await runAIPending(sid);return}
+  const team=S.teams[S.turn],level=team.aiLevel||S.settings.aiLevel||'normal';
+  const i=chooseAITile(level);
+  if(i<0){endTurn();return}
+  await runAIQuestion(i,sid);
+}
+async function runAIQuestion(i,sid){
+  aiFocusTile=i;sfx('open');renderBoard();
+  await aiWait(380,150);await waitConfirmClear(sid);
+  aiFocusTile=-1;
+  if(!isAISessionAlive(sid)){renderBoard();return}
+  const tile=S.tiles[i],team=S.teams[S.turn];
+  if(!tile.q){
+    await announce('🍀 행운 칸!','🤖 PC가 문제 없이 이 칸을 차지해요','gold',isReducedMotion()?500:1100);
+    if(!isAISessionAlive(sid))return;
+    await resolveCorrect(i,true);return;
+  }
+  const q=tile.q,opts=q.opts?shuffle([...q.opts]):null;
+  const longCls=q.q.length>65?' long':'';
+  const box=openModal(`
+    <div class="q-head" style="--c:${team.color}">
+      <span>🤖 PC 도전! (${(AI_CONF[team.aiLevel||'normal']||AI_CONF.normal).label})</span>
+      <div class="q-head-r"><span class="q-no">${i+1}번 문제${tile.fails?` · ${tile.fails}번 틀린 문제`:''}</span></div>
+    </div>
+    <div class="q-text${longCls}">${esc(q.q)}</div>
+    ${opts?`<div class="q-opts">${opts.map((o,k)=>`<button class="q-opt" data-k="${k}" disabled><b>${'①②③④⑤⑥'[k]}</b>${esc(o)}</button>`).join('')}</div>`
+          :`<div class="q-answer" id="q-answer">정답: <b>${esc(q.a)}</b></div>`}
+    <div class="q-msg" id="q-msg">🤖 생각하는 중...</div>`,'','ai-question');
+  box.style.setProperty('--qscale',qScale);
+  await aiWait(650,220);await waitConfirmClear(sid);
+  if(!isAISessionAlive(sid))return;
+  const conf=AI_CONF[team.aiLevel||'normal']||AI_CONF.normal;
+  const ok=Math.random()<conf.acc;
+  if(opts){
+    const rightIdx=opts.indexOf(q.a);
+    const wrongIdx=opts.map((_,k)=>k).filter(k=>k!==rightIdx);
+    const pickIdx=ok?rightIdx:(wrongIdx.length?pick(wrongIdx):rightIdx);
+    const pickedBtn=box.querySelector(`.q-opt[data-k="${pickIdx}"]`);
+    if(pickedBtn)pickedBtn.classList.add(ok?'right':'wrong');
+    if(!ok&&S.settings.wrongMode==='reveal'){
+      const rightBtn=box.querySelector(`.q-opt[data-k="${rightIdx}"]`);
+      if(rightBtn)rightBtn.classList.add('right');
+    }
+    $('#q-msg').textContent=ok?'⭕ PC 정답!':'❌ PC 오답!';
+  }else{
+    if(ok||S.settings.wrongMode==='reveal')$('#q-answer').classList.add('show');
+    $('#q-msg').textContent=ok?`⭕ PC 정답! (${q.a})`:'❌ PC 오답!';
+  }
+  sfx(ok?'correct':'wrong');
+  await aiWait(800,280);await waitConfirmClear(sid);
+  if(!isAISessionAlive(sid))return;
+  closeModal();
+  if(ok)await resolveCorrect(i);else resolveWrong(i);
+}
+async function runAIPending(sid){
+  await aiWait(450,150);await waitConfirmClear(sid);
+  if(!isAISessionAlive(sid))return;
+  const p=S.pending;if(!p){finishAction();return}
+  const targets=validTargets(p);if(!targets.length){finishAction();return}
+  const N=boardN(),me=S.turn,T=S.teams[me],lines=getLines(N),lo=lineOwners();
+  const conf=AI_CONF[T.aiLevel||'normal']||AI_CONF.normal;
+  const smart=Math.random()<conf.cardSmart;
+  const oppThreatScore=idx=>{
+    let val=0;
+    lines.forEach((l,k)=>{
+      if(!l.includes(idx))return;
+      const o=S.tiles[idx].owner;
+      if(lo[k]===o)val+=1000;
+      else if(l.filter(x=>S.tiles[x].owner===o).length>=N-1)val+=500;
+      else val+=l.filter(x=>S.tiles[x].owner===o).length*40;
+    });
+    return val;
+  };
+  if(p.type==='grab'){
+    const chosen=smart?targets.slice().sort((a,b)=>scoreTileForAI(b,me)-scoreTileForAI(a,me))[0]:pick(targets);
+    S.tiles[chosen].owner=me;S.tiles[chosen].opened=true;sfx('grab');
+    toast(`🤖 PC가 ${chosen+1}번 칸을 차지했어요!`);addLog(`${T.name} 🚩 ${chosen+1}번 칸 땅따먹기`);
+    finishAction();return;
+  }
+  if(p.type==='steal'){
+    const chosen=smart?targets.slice().sort((a,b)=>(oppThreatScore(b)+scoreTileForAI(b,me))-(oppThreatScore(a)+scoreTileForAI(a,me)))[0]:pick(targets);
+    const o=S.tiles[chosen].owner;
+    if(!blocked(o)){S.tiles[chosen].owner=me;T.stats.steals++;sfx('steal');toast(`🤖 PC가 ${chosen+1}번 칸을 빼앗았어요!`);addLog(`${T.name} 🗡️ ${S.teams[o].name}의 ${chosen+1}번 칸 뺏기`)}
+    finishAction();return;
+  }
+  if(p.type==='swap'){
+    let first=p.first;
+    if(p.step===1){
+      first=smart?targets.slice().sort((a,b)=>scoreTileForAI(a,me)-scoreTileForAI(b,me))[0]:pick(targets);
+      p.step=2;p.first=first;sfx('click');render();
+      await aiWait(250,100);await waitConfirmClear(sid);
+      if(!isAISessionAlive(sid))return;
+    }
+    const t2=validTargets(p);if(!t2.length){finishAction();return}
+    const second=smart?t2.slice().sort((a,b)=>(oppThreatScore(b)+scoreTileForAI(b,me))-(oppThreatScore(a)+scoreTileForAI(a,me)))[0]:pick(t2);
+    const o=S.tiles[second].owner;
+    if(!blocked(o)){S.tiles[first].owner=o;S.tiles[second].owner=me;T.stats.steals++;sfx('steal');toast(`🤖 PC가 ${first+1}번 ↔ ${second+1}번 칸을 바꿨어요!`);addLog(`${T.name} 🔄 ${first+1}번 ↔ ${S.teams[o].name}의 ${second+1}번`)}
+    finishAction();return;
+  }
+  if(p.type==='bomb'){
+    const bombScore=center=>[center,...neighbors(center,N)].reduce((sum,k)=>{
+      const o=S.tiles[k].owner;
+      return o>=0&&o!==me?sum+100+oppThreatScore(k):sum;
+    },0);
+    const chosen=smart?targets.slice().sort((a,b)=>bombScore(b)-bombScore(a))[0]:pick(targets);
+    p.aim=chosen;sfx('click');render();
+    await aiWait(500,180);await waitConfirmClear(sid);
+    if(!isAISessionAlive(sid))return;
+    await detonateBomb(chosen);
+  }
+}
+
 /* ---------- 보상 카드 · 주사위 · 벌칙 미션 ---------- */
 function drawCards(n=3){
-  const pool=REWARDS.filter(r=>(r.kind==='good'||S.settings.penalties)&&(!r.strong||S.settings.strong)).map(r=>({...r}));
+  const isAI=!!(S.teams[S.turn]&&S.teams[S.turn].isAI),isSolo=S.settings.playMode==='solo';
+  const pool=REWARDS.filter(r=>(r.kind==='good'||S.settings.penalties)&&(!r.strong||S.settings.strong)&&(!isAI||r.id!=='mission')).map(r=>({...r}));
   const out=[];
   while(out.length<n&&pool.length){
     const tot=pool.reduce((s,r)=>s+r.w,0);let x=Math.random()*tot,k=0;
     for(;k<pool.length-1;k++){x-=pool[k].w;if(x<=0)break}
-    const c=pool.splice(k,1)[0];if(c.id==='mission')c.desc=pick(MISSIONS);out.push(c);
+    const c=pool.splice(k,1)[0];if(c.id==='mission')c.desc=pick(isSolo?SOLO_MISSIONS:MISSIONS);out.push(c);
   }
   return out;
 }
 function cardFront(c){return `<div class="card-front ${c.kind}"><span class="kd">${c.kind==='bad'?'벌칙':'보상'}</span><div class="ci">${c.icon}</div><div class="cn">${c.name}</div><div class="cd">${esc(c.desc)}</div></div>`}
 function showCards(){
   S.phase='cards';save();
-  const cards=drawCards(3);
+  const cards=drawCards(3),isAI=!!(S.teams[S.turn]&&S.teams[S.turn].isAI);
   const box=openModal(`
-    <div class="cards-title">${teamTag(S.turn)} 정답 보상! 카드를 한 장 고르세요</div>
+    <div class="cards-title">${isAI?'🤖 PC가 카드를 고르고 있어요...':`${teamTag(S.turn)} 정답 보상! 카드를 한 장 고르세요`}</div>
     <div class="cards">${cards.map((c,k)=>`<button class="card" data-k="${k}" aria-label="${k+1}번 카드"><div class="card-inner"><div class="card-back"><span class="cnum">${k+1}</span><small class="cq">?</small></div>${cardFront(c)}</div></button>`).join('')}</div>
     <div class="cards-foot" id="cards-foot"></div>`,'wide','cards');
+  if(isAI){
+    const sid=gameSession;
+    box.querySelectorAll('.card').forEach(x=>x.disabled=true);
+    (async()=>{
+      await aiWait(500,180);await waitConfirmClear(sid);if(!isAISessionAlive(sid))return;
+      const k=(Math.random()*cards.length)|0,b=box.querySelector(`.card[data-k="${k}"]`),c=cards[k];
+      if(b){b.classList.add('flipped','chosen');sfx('flip')}
+      await aiWait(750,260);await waitConfirmClear(sid);if(!isAISessionAlive(sid))return;
+      sfx(c.kind==='bad'?'bad':'good');
+      box.querySelectorAll('.card').forEach(x=>{if(x!==b)x.classList.add('flipped','dim')});
+      $('#cards-foot').innerHTML=`<div class="res">${c.icon} ${c.name}${c.kind==='bad'?' 😱':' 🎉'}</div>`;
+      await aiWait(550,200);await waitConfirmClear(sid);if(!isAISessionAlive(sid))return;
+      closeModal();applyReward(c);
+    })();
+    return;
+  }
   let chosen=false;
   box.querySelectorAll('.card').forEach(b=>b.onclick=()=>{
     if(chosen)return;chosen=true;
@@ -1734,7 +2036,7 @@ function rollDiceModal(T){
       <div class="dice-face roll" id="dice-face">⚀</div>
       <div class="q-msg" id="dice-msg">데굴데굴...</div>
       <div class="m-actions hidden" id="dice-act"><button type="button" class="pbtn gold big" id="dice-ok">확인<kbd class="kh">Enter</kbd></button></div>`,'narrow','dice');
-    const steps=isReducedMotion()?2:10;
+    const steps=isReducedMotion()?2:(T.isAI?6:10);
     for(let k=0;k<steps;k++){
       const el=$('#dice-face');if(!el){res();return}
       el.textContent=faces[(Math.random()*6)|0];sfx('tick');
@@ -1744,6 +2046,12 @@ function rollDiceModal(T){
     el.classList.remove('roll');el.textContent=faces[d-1];
     T.bonus+=d*5;sfx('coin');render();
     $('#dice-msg').textContent=`🎉 ${d}이 나왔어요! (+${d*5}점 획득)`;
+    if(T.isAI){
+      const sid=gameSession;
+      await aiWait(700,220);await waitConfirmClear(sid);
+      if($('#dice-face'))closeModal();
+      res();return;
+    }
     $('#dice-act').classList.remove('hidden');
     $('#dice-ok').focus();
     $('#dice-ok').onclick=()=>{closeModal();res()};
@@ -1784,7 +2092,7 @@ async function applyReward(r){
     case 'dice':await rollDiceModal(T);break;
     case 'grab':case 'steal':case 'swap':case 'bomb':{
       const p={type:r.id,step:1};
-      if(validTargets(p).length){S.pending=p;render();return}
+      if(validTargets(p).length){S.pending=p;render();if(T.isAI)runAIPending(gameSession);return}
       fallback(r);break;
     }
     case 'shield':T.shield++;sfx('shield');break;
@@ -1804,7 +2112,15 @@ async function applyReward(r){
     }
     case 'freezeSelf':T.freeze=Math.min(2,T.freeze+1);sfx('freeze');break;
     case 'mission':await showMissionModal(r.desc);break;
-    default:if(TEAM_TARGET.includes(r.id)){pickTeam(r);return}
+    default:if(TEAM_TARGET.includes(r.id)){
+      if(T.isAI){
+        const sid=gameSession;
+        toast(`🤖 PC가 ${r.icon} ${r.name} 카드를 사용해요!`);
+        await aiWait(450,150);await waitConfirmClear(sid);if(!isAISessionAlive(sid))return;
+        await applyTeamEffect(r,0);return;
+      }
+      pickTeam(r);return;
+    }
   }
   finishAction();
 }
@@ -1887,6 +2203,12 @@ function showResult(){
   const order=S.teams.map((_,k)=>k).sort((a,b)=>scores[b]-scores[a]||tileCount(b)-tileCount(a));
   const rank=k=>1+scores.filter(s=>s>scores[k]).length;
   const awards=computeAwards(order,scores);
+  if(S.settings.playMode==='solo'&&S.teams.length===2){
+    const h=scores[0],a=scores[1];
+    $('#res-headline').textContent=h>a?'🎉 승리! PC를 이겼어요!':h===a?'🤝 무승부! 막상막하 승부!':'🤖 PC 승리! 다시 도전해요!';
+  }else{
+    $('#res-headline').textContent='🏆 최종 결과';
+  }
   const podOrder=order.length>=3?[order[1],order[0],order[2],...order.slice(3)]:[order[1],order[0]];
   const H={1:220,2:165,3:120,4:92},M={1:'🥇',2:'🥈',3:'🥉',4:'🎖️'};
   $('#podium').innerHTML=podOrder.map(k=>{const t=S.teams[k],r=rank(k);return `<div class="pod"><div class="medal">${M[r]||'🎖️'}</div><div class="e">${t.emoji}</div><div class="award">${awards[k]}</div>
@@ -1939,10 +2261,10 @@ function howtoHTML(){
   const rw=REWARDS.map(r=>`<div class="rw ${r.kind}"><span class="i">${r.icon}</span><div><b>${r.name}</b>${r.strong?' <small>(강력)</small>':''}<br>${r.id==='mission'?'팀이 함께 재미있는 미션을 해요.':r.desc}</div></div>`).join('');
   return `<div class="howto">
     <h2>❓ 게임 방법</h2>
-    <h4>1. 칸 고르고 문제 풀기</h4>
-    <ul><li>팀마다 차례대로 4×4 또는 5×5 빙고판에서 칸 하나를 골라 문제를 풀어요.</li>
-    <li>객관식은 보기를 누르면 바로 채점되고, 주관식은 선생님이 <b>👀 정답 보기</b> 후 <b>⭕/❌</b>로 판정해요.</li>
-    <li>설정에서 <b>자동 넘김</b>을 끄면 정답 후 해설을 설명하고 직접 다음으로 넘어갈 수 있어요.</li></ul>
+    <h4>1. 게임 시작 · 1인 플레이 & 팀 대결</h4>
+    <ul><li>처음 화면에서 <b>🤖 1인 플레이 (vs PC)</b>를 누르면 PC(쉬움·보통·어려움)와 혼자서 1:1 대결을 바로 시작할 수 있어요.</li>
+    <li>팀 대결에서는 4×4 또는 5×5 빙고판에서 팀마다 차례대로 칸을 골라 문제를 풀어요.</li>
+    <li>점수·제한시간·보상 카드·테마 등 세부 규칙은 <b>⚙️ 세부 설정 더보기</b>에서 언제든 바꿀 수 있어요.</li></ul>
     <h4>2. 점수 계산 및 힌트</h4>
     <ul><li><b>총점 = 칸 점수 × 칸 수 + 빙고 점수 × 빙고 줄 수 + 보너스 점수</b></li>
     <li>빙고 줄이 완성되면 보드 위에 팀 색 선이 그어지고, 1칸만 남은 칸은 🔥로 표시돼요.</li>
@@ -2001,7 +2323,8 @@ document.addEventListener('keydown',e=>{
   if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(e.target&&e.target.isContentEditable))return;
 
   if($('#modal').classList.contains('show')){
-    if(modalType==='question'){
+    const aiTurn=!!(S&&S.teams[S.turn]&&S.teams[S.turn].isAI);
+    if(modalType==='question'&&!aiTurn){
       const nextBtn=$('#q-next');
       if(nextBtn){if(e.key==='Enter'||e.key===' '){e.preventDefault();nextBtn.click()}return}
       if(/^[1-6]$/.test(e.key)){const b=$(`.q-opt[data-k="${+e.key-1}"]`);if(b&&!b.disabled){e.preventDefault();b.click()}return}
@@ -2013,13 +2336,13 @@ document.addEventListener('keydown',e=>{
       if(e.key==='Escape'){const c=$('#q-cancel');if(c&&!c.disabled){e.preventDefault();c.click()}}
       return;
     }
-    if(modalType==='cards'){
+    if(modalType==='cards'&&!aiTurn){
       const ok=$('#card-ok');
       if(ok&&(e.key==='Enter'||e.key===' ')){e.preventDefault();ok.click();return}
       if(/^[1-3]$/.test(e.key)){const c=$(`.card[data-k="${+e.key-1}"]`);if(c&&!c.disabled){e.preventDefault();c.click()}return}
       return;
     }
-    if(modalType==='teampick'){
+    if(modalType==='teampick'&&!aiTurn){
       if(/^[1-3]$/.test(e.key)){const btns=$$('.team-pick [data-t]');if(btns[+e.key-1]){e.preventDefault();btns[+e.key-1].click()}}
       return;
     }
@@ -2027,7 +2350,7 @@ document.addEventListener('keydown',e=>{
       if(e.key==='Enter'||e.key===' '){const b=$('#dice-ok')||$('#mission-ok');if(b&&!b.closest('.hidden')){e.preventDefault();b.click()}}
       return;
     }
-    if(e.key==='Escape')closeModal();
+    if(e.key==='Escape'&&(modalType==='info'||modalType==='manage'))closeModal();
     return;
   }
 
@@ -2044,12 +2367,14 @@ function refreshTitle(){
   if(s&&!s.over&&Array.isArray(s.tiles)&&s.tiles.length){
     const n=s.size||Math.round(Math.sqrt(s.tiles.length))||5;
     const left=s.tiles.filter(t=>!t.opened).length;
-    btn.innerHTML=`<span>⏯ 이어하기</span><span class="cont-meta">${esc(s.setName||'진행 중인 게임')} · ${n}×${n} · ${s.round||1}라운드 · 남은 ${left}칸</span>`;
+    const isSolo=s.settings?.playMode==='solo'||(Array.isArray(s.teams)&&s.teams.some(t=>t.isAI));
+    btn.innerHTML=`<span>⏯ 이어하기</span><span class="cont-meta">${isSolo?'🤖 1인 vs PC · ':''}${esc(s.setName||'진행 중인 게임')} · ${n}×${n} · ${s.round||1}라운드 · 남은 ${left}칸</span>`;
     btn.classList.remove('hidden');
   }else btn.classList.add('hidden');
 }
 $('#title-blocks').innerHTML='<div class="tile closed"></div>'+TEAM_PRESETS.map((t,k)=>`<div class="tile owned pat${k}" style="--f:${t.color};--s:${t.dark}"><span class="temo">${t.emoji}</span></div>`).join('');
-$('#btn-new').onclick=()=>{sfx('click');ac();renderSetup();show('setup')};
+$('#btn-new').onclick=()=>{sfx('click');ac();setAdvOpen(false);renderSetup();show('setup')};
+$('#btn-solo').onclick=()=>{sfx('click');ac();setup.settings.playMode='solo';saveSetup();setAdvOpen(false);renderSetup();show('setup')};
 $('#btn-continue').onclick=()=>{sfx('click');resumeGame()};
 $('#btn-editor').onclick=()=>{sfx('click');openEditor('title')};
 $('#btn-editor2').onclick=()=>{sfx('click');openEditor('setup')};
@@ -2089,7 +2414,7 @@ $('#arena').addEventListener('click',e=>{
   const k=+b.dataset.adj,v=+b.dataset.v;S.teams[k].bonus+=v;addLog(`선생님: ${S.teams[k].name} ${v>0?'+':''}${v}점`);sfx(v>0?'coin':'click');render();
 });
 $('#g-home').onclick=async()=>{
-  if(await confirmModal({title:'처음 화면으로 갈까요?',desc:'게임은 자동 저장되어 ‘이어하기’로 계속할 수 있어요.'})){closeModal();show('title')}
+  if(await confirmModal({title:'처음 화면으로 갈까요?',desc:'게임은 자동 저장되어 ‘이어하기’로 계속할 수 있어요.'})){gameSession++;aiFocusTile=-1;closeModal();show('title')}
 };
 $('#g-bgm').onclick=()=>{AU.bgm=!AU.bgm;AU.bgm?bgmStart():bgmStop();renderTop()};
 $('#g-sfx').onclick=()=>{AU.sfx=!AU.sfx;renderTop();sfx('click')};
@@ -2097,7 +2422,7 @@ $('#g-undo').onclick=async()=>{
   if(busy)return;
   if(!undoStack.length){toast('되돌릴 수 있는 기록이 없어요');return}
   if(!(await confirmModal({title:'한 단계 되돌릴까요?',desc:'바로 전 칸을 고르기 전 상태로 돌아갑니다.'})))return;
-  S=JSON.parse(undoStack.pop());closeModal();lastScores=null;render();toast('↶ 한 단계 되돌렸어요');
+  gameSession++;aiFocusTile=-1;S=JSON.parse(undoStack.pop());closeModal();lastScores=null;render();toast('↶ 한 단계 되돌렸어요');
 };
 $('#g-log').onclick=()=>{
   openModal(`<p class="m-title">📜 게임 기록</p><div class="log-list">${S.log.length?S.log.slice().reverse().map(l=>`<div>${esc(l)}</div>`).join(''):'<div>아직 기록이 없어요.</div>'}</div><div class="m-actions"><button class="pbtn gold" id="m-close">닫기</button></div>`,'','info');
