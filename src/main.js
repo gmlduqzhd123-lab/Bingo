@@ -7,14 +7,17 @@ import {
   MODE_PRESETS,
   REWARDS,
   MISSIONS,
-  TEAM_TARGET
+  TEAM_TARGET,
+  COMMUNITY_STARTER_SETS
 } from './data/sets.js';
 import {
   isSafeImageUrl,
   parseQuestions,
   serializeQuestions,
   matchShortAnswer,
-  getSpeechSpec
+  getSpeechSpec,
+  makeChosungHint,
+  formatRichText
 } from './core/questions.js';
 import {
   pick,
@@ -33,7 +36,8 @@ import {
   scoreTileForAI,
   chooseAITile,
   computeAwards,
-  computeSetStars
+  computeSetStars,
+  isCatchupEligible
 } from './core/engine.js';
 import {
   load,
@@ -47,8 +51,13 @@ import {
   saveSoloStats,
   loadSetMastery,
   recordSetMastery,
+  hashSetContent,
   loadMyCloudCodes,
-  saveMyCloudCode
+  saveMyCloudCode,
+  findReusableCloudCode,
+  loadHallOfFame,
+  addHallOfFameEntry,
+  clearHallOfFame
 } from './utils/storage.js';
 import {
   AU,
@@ -70,9 +79,13 @@ import {
   uploadSharedSet,
   fetchSharedSet,
   submitReviewResult,
-  fetchClassAnalytics
+  fetchClassAnalytics,
+  fetchPublicLibrary,
+  publishToPublicLibrary
 } from './utils/cloud.js';
-import { printQuestionSheet } from './ui/print.js';
+import { compressImageFile } from './utils/image.js';
+import { createLiveChannel, normalizeRoomCode } from './utils/realtime.js';
+import { printQuestionSheet, printBingoBoard } from './ui/print.js';
 
 /* ================= DOM · 공통 도우미 ================= */
 const $ = s => document.querySelector(s);
@@ -80,6 +93,11 @@ const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const isReducedMotion = () => !!(document.body.classList.contains('reduce-motion') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches));
+
+function announceLive(msg) {
+  const el = $('#sr-live');
+  if (el && msg) el.textContent = msg;
+}
 
 function applyMotion(reduce) {
   document.body.classList.toggle('reduce-motion', !!reduce);
@@ -112,6 +130,7 @@ function toast(msg) {
   t.className = 'toast';
   t.textContent = msg;
   $('#toasts').appendChild(t);
+  announceLive(msg);
   setTimeout(() => t.remove(), 3300);
 }
 
@@ -123,6 +142,7 @@ function announce(big, small = '', cls = '', ms = 1700) {
     const el = $('#announce');
     el.className = 'show ' + cls;
     el.innerHTML = `<div class="ann-big">${big}</div>${small ? `<div class="ann-small">${small}</div>` : ''}`;
+    announceLive(`${big} ${small}`.trim());
     let done = false;
     const finish = () => {
       if (done) return;
@@ -161,6 +181,17 @@ function shakeBoard() {
   void a.offsetWidth;
   a.classList.add('shake-board');
   setTimeout(() => a.classList.remove('shake-board'), 500);
+}
+
+function downloadCsv(filename, rows) {
+  const escCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = '\uFEFF' + rows.map(r => r.map(escCsv).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
 /* ================= 1인 전적 · 배지 ================= */
@@ -313,8 +344,13 @@ if (!setup || !Array.isArray(setup.teams)) {
     settings: { ...DEFAULT_SETTINGS }
   };
 }
+while (setup.teams.length < TEAM_PRESETS.length) {
+  const p = TEAM_PRESETS[setup.teams.length];
+  setup.teams.push({ name: p.name, emoji: p.emoji });
+}
 if (!setup.solo || typeof setup.solo !== 'object') setup.solo = { name: '나', emoji: '🦊' };
 setup.settings = { ...DEFAULT_SETTINGS, ...setup.settings };
+if (!Array.isArray(setup.settings.disabledRewards)) setup.settings.disabledRewards = [];
 setBgmStyle(setup.settings.bgmStyle);
 
 function saveSetup() {
@@ -419,7 +455,6 @@ function renderSetPicker() {
     return true;
   });
 
-  // Sort pinned favorites first while preserving relative order
   const ordered = [...filtered].sort((a, b) => (favs.includes(b.id) ? 1 : 0) - (favs.includes(a.id) ? 1 : 0));
   $('#set-cards').innerHTML = ordered.length
     ? ordered.map(s => {
@@ -448,7 +483,9 @@ function renderSetup() {
     { id: 'solo', label: '🤖 1인 vs PC' },
     { id: 'team2', label: '👥 2팀' },
     { id: 'team3', label: '👥 3팀' },
-    { id: 'team4', label: '👥 4팀' }
+    { id: 'team4', label: '👥 4팀' },
+    { id: 'team5', label: '👥 5팀' },
+    { id: 'team6', label: '👥 6팀' }
   ].map(m => {
     const on = m.id === 'solo' ? isSolo : (!isSolo && st.teamCount === +m.id.slice(4));
     return `<button type="button" data-mode="${m.id}" class="${on ? 'on' : ''}">${m.label}</button>`;
@@ -498,7 +535,8 @@ function renderSetup() {
   ].map(b => `<button type="button" data-bsize="${b.n}" class="${nSide === b.n ? 'on' : ''}">${b.label}</button>`).join('');
 
   const themeNames = { forest: '가을 숲', ocean: '바닷속', space: '우주', chalkboard: '칠판 다크' };
-  $('#adv-summary').textContent = `${st.tilePts}점·빙고${st.bingoPts}점${st.bingoGoal ? '·목표' + st.bingoGoal + '줄' : ''} · ${st.rewards ? '보상 ON' : '보상 OFF'} · ${st.timer ? st.timer + '초' : '시간 무제한'} · ${themeNames[st.theme] || '가을 숲'}`;
+  const disCnt = (st.disabledRewards || []).length;
+  $('#adv-summary').textContent = `${st.tilePts}점·빙고${st.bingoPts}점${st.bingoGoal ? '·목표' + st.bingoGoal + '줄' : ''} · ${st.rewards ? (disCnt ? `보상(제외${disCnt})` : '보상 ON') : '보상 OFF'} · ${st.timer ? st.timer + '초' : '시간 무제한'} · ${themeNames[st.theme] || '가을 숲'}`;
   $$('[data-opt]').forEach(el => {
     const k = el.dataset.opt;
     if (el.type === 'checkbox') el.checked = !!st[k];
@@ -506,7 +544,44 @@ function renderSetup() {
   });
   $('#o-penalties').disabled = !st.rewards;
   $('#o-strong').disabled = !st.rewards;
+  $('#btn-rw-custom').disabled = !st.rewards;
 }
+
+function openRewardCustomizerModal() {
+  const dis = new Set(setup.settings.disabledRewards || []);
+  openModal(`
+    <p class="m-title">🃏 보상 카드 세부 선택</p>
+    <p class="m-desc">수업에서 빼고 싶은 보상·벌칙 카드를 체크 해제하세요.</p>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px">
+      <button type="button" class="pbtn sm white" id="rwc-all">✅ 전체 사용</button>
+      <button type="button" class="pbtn sm white" id="rwc-peace">🕊️ 뺏기·폭탄 빼기</button>
+      <button type="button" class="pbtn sm white" id="rwc-nobad">🌈 벌칙 카드 모두 빼기</button>
+    </div>
+    <div class="rw-custom-grid">
+      ${REWARDS.map(r => `<label class="rw-custom-item"><input type="checkbox" data-rwc="${r.id}" ${dis.has(r.id) ? '' : 'checked'}><span>${r.icon} ${r.name}${r.kind === 'bad' ? ' <small>(벌칙)</small>' : ''}${r.strong ? ' <small>(강력)</small>' : ''}</span></label>`).join('')}
+    </div>
+    <div class="m-actions"><button type="button" class="pbtn gold" id="m-close">적용하고 닫기</button></div>`, 'wide', 'info');
+  const syncFromChecks = () => {
+    const disabled = $$('[data-rwc]').filter(c => !c.checked).map(c => c.dataset.rwc);
+    setup.settings.disabledRewards = disabled;
+    saveSetup();
+    renderSetup();
+  };
+  $$('[data-rwc]').forEach(c => c.addEventListener('change', syncFromChecks));
+  $('#rwc-all').onclick = () => { $$('[data-rwc]').forEach(c => { c.checked = true; }); syncFromChecks(); };
+  $('#rwc-peace').onclick = () => {
+    const peaceBan = new Set(['steal', 'swap', 'bomb', 'stealPts', 'scoreSwap', 'freezeOther']);
+    $$('[data-rwc]').forEach(c => { c.checked = !peaceBan.has(c.dataset.rwc); });
+    syncFromChecks();
+  };
+  $('#rwc-nobad').onclick = () => {
+    const badIds = new Set(REWARDS.filter(r => r.kind === 'bad').map(r => r.id));
+    $$('[data-rwc]').forEach(c => { c.checked = !badIds.has(c.dataset.rwc); });
+    syncFromChecks();
+  };
+  $('#m-close').onclick = closeModal;
+}
+$('#btn-rw-custom').onclick = () => { sfx('click'); openRewardCustomizerModal(); };
 
 $('#set-search').addEventListener('input', e => {
   setQuery = e.target.value;
@@ -621,6 +696,7 @@ let edMode = 'text';
 let edSnapshot = '';
 let cardList = [];
 let dragCardIdx = -1;
+let imgUploadIdx = -1;
 
 const currentEdSnap = () => $('#ed-name').value + '\0' + $('#ed-text').value;
 const isEdDirty = () => currentEdSnap() !== edSnapshot;
@@ -644,7 +720,8 @@ function loadCardsFromText() {
     w3: x.opts && x.opts[3] ? x.opts[3] : '',
     extraWrong: x.opts && x.opts.length > 4 ? x.opts.slice(4) : [],
     explain: x.explain || '',
-    img: x.img || ''
+    img: x.img || '',
+    selected: false
   }));
 }
 
@@ -657,10 +734,12 @@ function renderCardEditor() {
   wrap.innerHTML = cardList.map((c, idx) => {
     const inc = !(c.q.trim() && c.a.trim());
     const canAddOpt = c.isMc && (3 + (c.extraWrong || []).length) < 5;
+    const validImg = c.img && isSafeImageUrl(c.img);
     return `
     <div class="ed-card${inc ? ' incomplete' : ''}" data-ci="${idx}" draggable="true">
       <div class="ed-card-top">
         <div style="display:flex;align-items:center;gap:6px">
+          <input type="checkbox" class="ed-card-chk" data-csel="${idx}" ${c.selected ? 'checked' : ''} aria-label="${idx + 1}번 선택">
           <span class="ed-drag" title="끌어서 순서 바꾸기">⠿</span>
           <b>#${idx + 1}</b>
         </div>
@@ -672,7 +751,7 @@ function renderCardEditor() {
           <button type="button" class="pbtn sm bad" data-cdel="${idx}" title="삭제">🗑️</button>
         </div>
       </div>
-      <input data-cf="q" value="${esc(c.q)}" placeholder="문제를 입력하세요">
+      <input data-cf="q" value="${esc(c.q)}" placeholder="문제를 입력하세요 (**강조**, ____ 빈칸, ^2 위첨자)">
       <input data-cf="a" value="${esc(c.a)}" placeholder="정답을 입력하세요">
       ${c.isMc ? `<div class="ed-card-opts">
         <input data-cf="w1" value="${esc(c.w1)}" placeholder="오답 1">
@@ -681,7 +760,12 @@ function renderCardEditor() {
         ${(c.extraWrong || []).map((w, j) => `<input data-cex="${j}" value="${esc(w)}" placeholder="오답 ${j + 4}">`).join('')}
       </div>` : ''}
       <input data-cf="explain" value="${esc(c.explain)}" placeholder="해설 (선택)">
-      <input data-cf="img" value="${esc(c.img || '')}" placeholder="그림 URL (선택 · https://...)">
+      <div class="ed-img-row">
+        <input data-cf="img" value="${esc(c.img || '')}" placeholder="그림 URL 또는 Ctrl+V / 🖼️ 파일 올리기 (선택)">
+        <button type="button" class="pbtn sm white" data-cimgup="${idx}" title="컴퓨터에서 그림 파일 올리기">🖼️</button>
+        ${validImg ? `<button type="button" class="pbtn sm bad" data-cimgclr="${idx}" title="그림 지우기">✕</button>` : ''}
+      </div>
+      ${validImg ? `<img class="ed-img-thumb" src="${esc(c.img)}" alt="첨부 그림 미리보기" onerror="this.style.display='none'">` : ''}
       <div class="ed-card-foot">
         <div class="ed-card-warn${inc ? '' : ' hidden'}">⚠️ 문제와 정답을 모두 입력해야 저장돼요</div>
         ${canAddOpt ? `<button type="button" class="pbtn sm white" data-caddopt="${idx}">+ 오답 추가</button>` : ''}
@@ -734,6 +818,43 @@ $('#ed-cards').addEventListener('dragend', () => {
   $$('.ed-card.dragging, .ed-card.drag-over').forEach(el => el.classList.remove('dragging', 'drag-over'));
 });
 
+$('#ed-cards').addEventListener('paste', async e => {
+  const card = e.target.closest('.ed-card');
+  if (!card) return;
+  const items = e.clipboardData && [...(e.clipboardData.items || [])];
+  const imgItem = items && items.find(it => it.type && it.type.startsWith('image/'));
+  if (!imgItem) return;
+  e.preventDefault();
+  const file = imgItem.getAsFile();
+  if (!file) return;
+  try {
+    const dataUrl = await compressImageFile(file);
+    cardList[+card.dataset.ci].img = dataUrl;
+    syncCardsToText();
+    renderCardEditor();
+    toast('🖼️ 클립보드 그림을 압축해 넣었어요!');
+  } catch {
+    toast('⚠️ 그림을 처리하지 못했어요 (파일 크기/형식 확인)');
+  }
+});
+
+$('#ed-img-file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f || imgUploadIdx < 0 || !cardList[imgUploadIdx]) return;
+  try {
+    const dataUrl = await compressImageFile(f);
+    cardList[imgUploadIdx].img = dataUrl;
+    syncCardsToText();
+    renderCardEditor();
+    toast('🖼️ 그림을 첨부했어요!');
+  } catch {
+    toast('⚠️ 이미지 파일만 올릴 수 있어요');
+  } finally {
+    imgUploadIdx = -1;
+  }
+});
+
 $('#ed-cards').addEventListener('input', e => {
   const card = e.target.closest('.ed-card');
   if (!card) return;
@@ -756,12 +877,32 @@ $('#ed-cards').addEventListener('input', e => {
 });
 $('#ed-cards').addEventListener('change', e => {
   const card = e.target.closest('.ed-card');
-  if (!card || e.target.dataset.cf !== 'type') return;
-  cardList[+card.dataset.ci].isMc = e.target.value === 'mc';
-  syncCardsToText();
-  renderCardEditor();
+  if (!card) return;
+  const ci = +card.dataset.ci;
+  if (e.target.dataset.csel != null) {
+    cardList[ci].selected = e.target.checked;
+    return;
+  }
+  if (e.target.dataset.cf === 'type') {
+    cardList[ci].isMc = e.target.value === 'mc';
+    syncCardsToText();
+    renderCardEditor();
+  }
 });
 $('#ed-cards').addEventListener('click', e => {
+  const iu = e.target.closest('[data-cimgup]');
+  if (iu) {
+    imgUploadIdx = +iu.dataset.cimgup;
+    $('#ed-img-file').click();
+    return;
+  }
+  const ic = e.target.closest('[data-cimgclr]');
+  if (ic) {
+    cardList[+ic.dataset.cimgclr].img = '';
+    syncCardsToText();
+    renderCardEditor();
+    return;
+  }
   const pv = e.target.closest('[data-cpreview]');
   if (pv) {
     const c = cardList[+pv.dataset.cpreview];
@@ -800,8 +941,32 @@ $('#ed-cards').addEventListener('click', e => {
   syncCardsToText();
   renderCardEditor();
 });
+
+$('#ed-sel-all').onclick = () => {
+  if (!cardList.length) return;
+  const allOn = cardList.every(c => c.selected);
+  cardList.forEach(c => { c.selected = !allOn; });
+  renderCardEditor();
+};
+$('#ed-shuffle-cards').onclick = () => {
+  if (cardList.length < 2) return;
+  shuffle(cardList);
+  syncCardsToText();
+  renderCardEditor();
+  toast('🔀 카드 순서를 무작위로 섞었어요');
+};
+$('#ed-del-selected').onclick = async () => {
+  const n = cardList.filter(c => c.selected).length;
+  if (!n) { toast('삭제할 카드를 먼저 체크해 주세요'); return; }
+  if (!(await confirmModal({ title: `선택한 ${n}개 문제를 삭제할까요?`, okText: '삭제', danger: true }))) return;
+  cardList = cardList.filter(c => !c.selected);
+  syncCardsToText();
+  renderCardEditor();
+  toast(`🗑️ ${n}개 문제를 삭제했어요`);
+};
+
 $('#ed-add-card').onclick = () => {
-  cardList.push({ q: '', a: '', isMc: true, w1: '', w2: '', w3: '', extraWrong: [], explain: '', img: '' });
+  cardList.push({ q: '', a: '', isMc: true, w1: '', w2: '', w3: '', extraWrong: [], explain: '', img: '', selected: false });
   renderCardEditor();
   const last = $('#ed-cards .ed-card:last-child input[data-cf="q"]');
   if (last) { last.focus(); last.scrollIntoView({ block: 'nearest' }); }
@@ -821,19 +986,19 @@ function openQuestionPreview(item, num) {
   const opts = item.opts ? [...item.opts] : null;
   const spec = getSpeechSpec(item.q);
   const ttsBtn = isTtsSupported() ? `<button type="button" class="q-tts-btn" id="q-tts" title="문제 읽어주기">🔊 읽기</button>` : '';
-  const imgHtml = item.img && isSafeImageUrl(item.img) ? `<img class="q-img" src="${esc(item.img)}" alt="문제 그림">` : '';
+  const imgHtml = item.img && isSafeImageUrl(item.img) ? `<img class="q-img" src="${esc(item.img)}" alt="문제 그림" onerror="this.style.display='none'">` : '';
   openModal(`
     <div class="q-head" style="--c:#2f7de1">
       <span>👁️ 문제 미리보기</span>
       <div class="q-head-r">${ttsBtn}<span class="q-no">#${num}번</span></div>
     </div>
     ${imgHtml}
-    <div class="q-text${item.q.length > 65 ? ' long' : ''}">${esc(item.q)}</div>
-    ${opts ? `<div class="q-opts">${opts.map((o, k) => `<button type="button" class="q-opt ${o === item.a ? 'right' : ''}" disabled><b>${'①②③④⑤⑥'[k]}</b>${esc(o)}</button>`).join('')}</div>`
-      : `<div class="q-answer show">정답: <b>${esc(item.a)}</b></div>`}
-    ${item.explain ? `<div class="q-explain">💡 <b>해설:</b> ${esc(item.explain)}</div>` : ''}
+    <div class="q-text${item.q.length > 65 ? ' long' : ''}">${formatRichText(item.q)}</div>
+    ${opts ? `<div class="q-opts">${opts.map((o, k) => `<button type="button" class="q-opt ${o === item.a ? 'right' : ''}" disabled><b>${'①②③④⑤⑥'[k]}</b>${formatRichText(o)}</button>`).join('')}</div>`
+      : `<div class="q-answer show">정답: <b>${formatRichText(item.a)}</b></div>`}
+    ${item.explain ? `<div class="q-explain">💡 <b>해설:</b> ${formatRichText(item.explain)}</div>` : ''}
     <div class="m-actions"><button type="button" class="pbtn gold" id="m-close">닫기</button></div>`, '', 'info');
-  if ($('#q-tts')) $('#q-tts').onclick = () => speakText(spec.text, spec.lang);
+  if ($('#q-tts')) $('#q-tts').onclick = () => speakText(spec.text, spec.lang, setup.settings.ttsRate || 1);
   $('#m-close').onclick = closeModal;
 }
 
@@ -877,7 +1042,7 @@ function updateEdStatus() {
   if (errors.length) h += errors.slice(0, 4).map(e => `<button type="button" class="ed-err" data-line="${e.line}">⚠️ ${esc(e.msg)}</button>`).join('') + (errors.length > 4 ? `<div style="margin-top:4px;font-size:12.5px">…외 ${errors.length - 4}줄</div>` : '');
   st.innerHTML = h;
   st.classList.toggle('warn', !list.length || errors.length > 0);
-  $('#ed-preview').innerHTML = list.map((q, i) => `<div><span class="tag ${q.opts ? '' : 's'}">${q.opts ? '객관식' : '주관식'}</span><b>${i + 1}.</b> ${esc(q.q)} → <b>${esc(q.a)}</b>${q.opts ? ` <span style="color:var(--muted)">(오답: ${q.opts.slice(1).map(esc).join(', ')})</span>` : ''}${q.explain ? ` <span style="color:#2563eb">[해설: ${esc(q.explain)}]</span>` : ''}${q.img ? ` <span style="color:#059669">[🖼️ 그림]</span>` : ''}</div>`).join('');
+  $('#ed-preview').innerHTML = list.map((q, i) => `<div><span class="tag ${q.opts ? '' : 's'}">${q.opts ? '객관식' : '주관식'}</span><b>${i + 1}.</b> ${formatRichText(q.q)} → <b>${formatRichText(q.a)}</b>${q.opts ? ` <span style="color:var(--muted)">(오답: ${q.opts.slice(1).map(esc).join(', ')})</span>` : ''}${q.explain ? ` <span style="color:#2563eb">[해설: ${esc(q.explain)}]</span>` : ''}${q.img ? ` <span style="color:#059669">[🖼️ 그림]</span>` : ''}</div>`).join('');
   $('#ed-preview').classList.toggle('hidden', !list.length);
   refreshDirty();
 }
@@ -1015,11 +1180,25 @@ $('#ed-export').onclick = () => {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 };
 $('#ed-import').onclick = () => $('#ed-file').click();
+
 $('#ed-print').onclick = () => {
   const parsed = parseQuestions($('#ed-text').value).list;
   if (!parsed.length) { toast('인쇄할 문제가 없어요'); return; }
   const name = $('#ed-name').value.trim() || '빙고 퀴즈 학습지';
-  printQuestionSheet({ title: name, subtitle: `총 ${parsed.length}문제 · 빙고 땅따먹기 퀴즈`, questions: parsed, includeAnswers: true });
+  const nSide = [3, 4, 5].includes(setup.settings.boardSize) ? setup.settings.boardSize : 5;
+  openModal(`
+    <p class="m-title">🖨️ 인쇄 방식 선택</p>
+    <p class="m-desc">“${esc(name)}” (${parsed.length}문제)</p>
+    <div class="m-actions" style="flex-direction:column;align-items:stretch">
+      <button type="button" class="pbtn gold" id="pr-student">📝 학생용 학습지 인쇄 (문제만)</button>
+      <button type="button" class="pbtn blue" id="pr-teacher">📋 교사용 학습지 인쇄 (정답·해설 포함)</button>
+      <button type="button" class="pbtn ok" id="pr-bingo">🎲 종이 빙고판 인쇄 (${nSide}×${nSide})</button>
+      <button type="button" class="pbtn white" id="m-close">닫기</button>
+    </div>`, 'narrow', 'info');
+  $('#pr-student').onclick = () => { closeModal(); printQuestionSheet({ title: name, subtitle: `총 ${parsed.length}문제 · 학생용`, questions: parsed, includeAnswers: false }); };
+  $('#pr-teacher').onclick = () => { closeModal(); printQuestionSheet({ title: name, subtitle: `총 ${parsed.length}문제 · 교사용 정답지`, questions: parsed, includeAnswers: true }); };
+  $('#pr-bingo').onclick = () => { closeModal(); printBingoBoard({ title: name, size: nSide, questions: parsed }); };
+  $('#m-close').onclick = closeModal;
 };
 
 $('#sets-backup').onclick = () => {
@@ -1107,23 +1286,68 @@ function openQrZoom(title, count, svgHtml) {
 }
 $('#qr-zoom-overlay').addEventListener('click', e => { if (e.target === $('#qr-zoom-overlay')) closeQrZoom(); });
 
-async function openShareModal(name, text, count) {
+function openPublishLibraryModal(name, text, count) {
+  openModal(`
+    <p class="m-title">🏛️ 공개 문제 창고에 등록</p>
+    <p class="m-desc">다른 선생님들도 검색해서 수업에 쓸 수 있게 공유해요.</p>
+    <form id="pub-form" class="tm-grid" style="margin-top:12px">
+      <div class="opt-row"><label>제목</label><input id="pub-title" class="ed-field" style="max-width:66%" maxlength="40" value="${esc(name)}"></div>
+      <div class="opt-row"><label>과목</label><select id="pub-subj"><option>상식</option><option>과학</option><option>수학</option><option>사회</option><option>국어</option><option>영어</option><option>기타</option></select></div>
+      <div class="opt-row"><label>추천 학년</label><select id="pub-grade"><option>전학년</option><option>초등</option><option>중등</option><option>고등</option></select></div>
+      <div class="opt-row"><label>작성자 이름</label><input id="pub-author" class="ed-field" style="max-width:66%" maxlength="20" value="선생님" placeholder="예: 엽쌤"></div>
+      <div class="q-msg" id="pub-msg" style="font-size:14px"></div>
+      <div class="m-actions">
+        <button type="submit" class="pbtn ok" id="pub-submit">🌐 등록하기 (${count}문제)</button>
+        <button type="button" class="pbtn white" id="m-close">취소</button>
+      </div>
+    </form>`, 'narrow', 'info');
+  $('#m-close').onclick = closeModal;
+  $('#pub-form').onsubmit = async e => {
+    e.preventDefault();
+    const btn = $('#pub-submit');
+    btn.disabled = true;
+    $('#pub-msg').textContent = '☁️ 공개 창고에 올리는 중...';
+    try {
+      await publishToPublicLibrary({
+        title: $('#pub-title').value,
+        subject: $('#pub-subj').value,
+        grade: $('#pub-grade').value,
+        authorAlias: $('#pub-author').value,
+        content: text,
+        questionCount: count
+      });
+      closeModal();
+      sfx('coin');
+      toast('🏛️ 공개 문제 창고에 등록했어요!');
+    } catch {
+      btn.disabled = false;
+      $('#pub-msg').textContent = '⚠️ 등록에 실패했어요. 네트워크 또는 Supabase 테이블 설정을 확인해 주세요.';
+    }
+  };
+}
+
+async function openShareModal(name, text, count, forceNew = false) {
   const token = await encodeSetShare(name, text);
   const baseUrl = location.href.split('#')[0].split('?')[0];
   const offlineUrl = baseUrl + '#set=' + token;
   let cloudResult = null;
   let cloudError = '';
+  let reused = false;
 
-  if (navigator.onLine !== false) {
+  const existing = !forceNew ? findReusableCloudCode(name, text) : null;
+  if (existing) {
+    cloudResult = { code: existing.code, shareUrl: `${baseUrl}?code=${existing.code}` };
+    reused = true;
+  } else if (navigator.onLine !== false) {
     try {
       cloudResult = await uploadSharedSet(name, text, count, baseUrl);
-      saveMyCloudCode({ code: cloudResult.code, title: name, count });
+      saveMyCloudCode({ code: cloudResult.code, title: name, count, contentHash: hashSetContent(name, text) });
       if (editingId) {
         const sets = savedSets();
         const cur = sets.find(s => s.id === editingId);
         if (cur) { cur.shareCode = cloudResult.code; store('bq_sets', sets); renderSetList(); }
       }
-    } catch (e) {
+    } catch {
       cloudError = '클라우드 코드 서버가 아직 준비되지 않았거나 오프라인 상태예요. 아래 오프라인 링크·QR로 바로 공유할 수 있어요.';
     }
   } else {
@@ -1144,11 +1368,12 @@ async function openShareModal(name, text, count) {
       </div>
       ${mode === 'cloud' && cloudResult ? `
         <div class="cloud-code-box">
-          <div style="font-size:13px;font-weight:800">학생이 ‘공유 코드로 문제 열기’에 입력하거나 QR을 찍으세요</div>
+          <div style="font-size:13px;font-weight:800">${reused ? '같은 내용의 기존 코드를 재사용했어요 · ' : ''}학생이 ‘코드 문제’에 입력하거나 QR을 찍으세요</div>
           <div class="cloud-code-val">${esc(cloudResult.code)}</div>
           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px">
             <button type="button" class="pbtn sm gold" id="sh-copy-code">📋 코드 복사</button>
             <button type="button" class="pbtn sm blue" id="sh-analytics">📊 학급 복습 현황</button>
+            <button type="button" class="pbtn sm white" id="sh-new-code">🔄 새 코드 발급</button>
           </div>
         </div>` : (cloudError ? `<div class="set-info warn" style="margin:6px 0">${esc(cloudError)}</div>` : '')}
       <div class="share-qr-box">
@@ -1161,7 +1386,7 @@ async function openShareModal(name, text, count) {
         <button type="button" class="pbtn gold sm" id="sh-copy">📋 링크 복사</button>
       </div>
       <p class="hint" style="text-align:center;margin-top:8px">학생이 QR을 찍거나 코드를 열면 <b>🤖 1인 플레이(vs PC)</b>로 바로 복습할 수 있어요!</p>
-      <div class="m-actions">${qrSvg ? '<button type="button" class="pbtn blue" id="sh-zoom-btn">🔍 QR 크게 보기</button>' : ''}<button type="button" class="pbtn white" id="m-close">닫기</button></div>`, 'narrow', 'info');
+      <div class="m-actions">${qrSvg ? '<button type="button" class="pbtn blue" id="sh-zoom-btn">🔍 QR 크게 보기</button>' : ''}<button type="button" class="pbtn ok" id="sh-publish">🏛️ 공개 창고에 등록</button><button type="button" class="pbtn white" id="m-close">닫기</button></div>`, 'narrow', 'info');
 
     $$('[data-smode]').forEach(b => b.onclick = () => {
       if (b.disabled) return;
@@ -1179,6 +1404,10 @@ async function openShareModal(name, text, count) {
     if ($('#sh-analytics') && cloudResult) {
       $('#sh-analytics').onclick = () => openAnalyticsModal(cloudResult.code, name);
     }
+    if ($('#sh-new-code')) {
+      $('#sh-new-code').onclick = () => openShareModal(name, text, count, true);
+    }
+    $('#sh-publish').onclick = () => openPublishLibraryModal(name, text, count);
     $('#sh-copy').onclick = async () => {
       try { await navigator.clipboard.writeText(activeUrl); toast('📋 공유 링크를 복사했어요!'); }
       catch {
@@ -1263,7 +1492,7 @@ $('#p-copy').onclick = async () => {
   }
 };
 
-/* ================= 클라우드 코드 열기 · 학급 복습 현황 ================= */
+/* ================= 클라우드 코드 열기 · 공개 창고 · 학급 복습 현황 · 명예의 전당 ================= */
 async function openSharedSetPrompt({ name, rawText, count, shareCode = null }) {
   const parsed = parseQuestions(rawText).list;
   if (!parsed.length) { toast('공유된 문제 세트를 읽지 못했어요'); return; }
@@ -1292,6 +1521,7 @@ async function openSharedSetPrompt({ name, rawText, count, shareCode = null }) {
     <p class="m-title">📦 공유된 문제 세트</p>
     <p class="m-desc" style="font-weight:800;margin-bottom:6px">“${esc(name)}”${shareCode ? ` <small>(${esc(shareCode)})</small>` : ''}</p>
     <p class="m-desc">총 <b>${parsed.length}문제</b>가 들어 있어요. 바로 풀어 볼까요?</p>
+    ${shareCode ? `<div class="q-sa-form" style="margin:12px auto 4px"><input id="sh-alias" maxlength="12" value="${esc(setup.solo.name === '나' ? '' : setup.solo.name)}" placeholder="내 학번 또는 이름 (예: 5반 김철수)"></div>` : ''}
     <div class="m-actions">
       <button type="button" class="pbtn ok big" id="sh-solo">🤖 저장하고 1인 플레이 (vs PC)</button>
       <button type="button" class="pbtn gold" id="sh-save">💾 내 문제 세트에 저장</button>
@@ -1299,6 +1529,10 @@ async function openSharedSetPrompt({ name, rawText, count, shareCode = null }) {
     </div>`, 'narrow', 'info', resumePausedPC);
   $('#sh-solo').onclick = () => {
     skipResume = true;
+    const aliasEl = $('#sh-alias');
+    if (aliasEl && aliasEl.value.trim()) {
+      setup.solo.name = aliasEl.value.trim().slice(0, 12);
+    }
     const id = saveShared();
     closeModal();
     setup.settings.playMode = 'solo';
@@ -1362,6 +1596,113 @@ function openCodeJoinModal() {
   };
 }
 
+async function openPublicLibraryModal() {
+  let subjFilter = 'all';
+  let qText = '';
+  let merged = [...COMMUNITY_STARTER_SETS];
+  openModal(`
+    <p class="m-title">🏛️ 공개 문제 창고</p>
+    <p class="m-desc">수업에 바로 쓸 수 있는 추천·공유 세트를 골라 보세요.</p>
+    <div class="set-picker-bar" style="margin-top:12px">
+      <input type="search" class="set-search" id="lib-search" placeholder="🔍 단원·과목·작성자 검색">
+      <div class="set-filter-chips" id="lib-filters"></div>
+    </div>
+    <div class="lib-grid" id="lib-grid"></div>
+    <div class="m-actions"><button type="button" class="pbtn gold" id="m-close">닫기</button></div>`, 'wide', 'info');
+  $('#m-close').onclick = closeModal;
+
+  const subjects = ['all', '상식', '과학', '수학', '사회', '국어', '영어', '기타'];
+  const drawLib = () => {
+    const fEl = $('#lib-filters');
+    const gEl = $('#lib-grid');
+    if (!fEl || !gEl) return;
+    fEl.innerHTML = subjects.map(s => `<button type="button" class="set-filter-btn ${subjFilter === s ? 'on' : ''}" data-lsubj="${s}">${s === 'all' ? '전체' : s}</button>`).join('');
+    const q = qText.trim().toLowerCase();
+    const list = merged.filter(it => {
+      if (subjFilter !== 'all' && it.subject !== subjFilter) return false;
+      if (q && !`${it.title} ${it.subject} ${it.grade} ${it.author_alias}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    gEl.innerHTML = list.length ? list.map((it, idx) => `
+      <div class="lib-card">
+        <div class="lib-card-title">${esc(it.title)}</div>
+        <div class="lib-card-meta">${esc(it.subject)} · ${esc(it.grade)} · ${it.question_count}문제 · ${esc(it.author_alias)}</div>
+        <div style="margin-top:auto;display:flex;gap:6px;flex-wrap:wrap;padding-top:6px">
+          <button type="button" class="pbtn sm gold" data-libpick="${idx}">📥 가져오기</button>
+        </div>
+      </div>`).join('') : '<div class="hint" style="grid-column:1/-1;text-align:center;padding:18px">조건에 맞는 세트가 없어요.</div>';
+    gEl._list = list;
+  };
+  $('#lib-search').addEventListener('input', e => { qText = e.target.value; drawLib(); });
+  $('#lib-filters').addEventListener('click', e => {
+    const b = e.target.closest('[data-lsubj]');
+    if (!b) return;
+    subjFilter = b.dataset.lsubj;
+    drawLib();
+  });
+  $('#lib-grid').addEventListener('click', e => {
+    const b = e.target.closest('[data-libpick]');
+    if (!b) return;
+    const gEl = $('#lib-grid');
+    const item = gEl && gEl._list ? gEl._list[+b.dataset.libpick] : null;
+    if (!item) return;
+    closeModal();
+    openSharedSetPrompt({ name: item.title, rawText: item.content, count: item.question_count });
+  });
+  drawLib();
+
+  const { items: cloudItems } = await fetchPublicLibrary();
+  if (!$('#lib-grid') || !cloudItems.length) return;
+  const seenTitles = new Set();
+  merged = [...cloudItems, ...COMMUNITY_STARTER_SETS].filter(it => {
+    const k = `${it.title}\0${it.question_count}`;
+    if (seenTitles.has(k)) return false;
+    seenTitles.add(k);
+    return true;
+  });
+  drawLib();
+}
+
+function openHallOfFameModal() {
+  const drawHof = () => {
+    const list = loadHallOfFame();
+    openModal(`
+      <p class="m-title">🏆 학급 명예의 전당</p>
+      <p class="m-desc">지금까지 이 기기에 저장된 경기 우승 기록이에요.</p>
+      ${list.length ? `<div class="hof-list">${list.map(h => `
+        <div class="hof-item">
+          <div>
+            <b>${esc(h.winnerEmoji)} ${esc(h.winnerName)}</b> <span style="color:#d97706;font-weight:900">${h.winnerScore}점</span>
+            <div style="font-size:12.5px;color:var(--muted)">${esc(h.setName)} · ${h.boardSize}×${h.boardSize}${h.runnerUp ? ` · ${esc(h.runnerUp)}` : ''}</div>
+          </div>
+          <small style="color:var(--muted)">${new Date(h.date).toLocaleDateString('ko-KR')}</small>
+        </div>`).join('')}</div>`
+      : '<div class="hint" style="text-align:center;padding:24px">아직 기록된 우승팀이 없어요. 경기가 끝난 뒤 ‘🏆 명예의 전당 기록’을 눌러 보세요!</div>'}
+      <div class="m-actions">
+        ${list.length ? '<button type="button" class="pbtn blue" id="hof-csv">📥 CSV 내보내기</button><button type="button" class="pbtn bad" id="hof-clear">🗑️ 기록 지우기</button>' : ''}
+        <button type="button" class="pbtn gold" id="m-close">닫기</button>
+      </div>`, 'narrow', 'info');
+    if ($('#hof-csv')) {
+      $('#hof-csv').onclick = () => {
+        downloadCsv('빙고퀴즈_명예의전당.csv', [
+          ['날짜', '문제 세트', '크기', '우승', '점수', '비고'],
+          ...loadHallOfFame().map(h => [new Date(h.date).toLocaleString('ko-KR'), h.setName, `${h.boardSize}x${h.boardSize}`, h.winnerName, h.winnerScore, h.runnerUp])
+        ]);
+        toast('📥 명예의 전당 CSV를 저장했어요');
+      };
+    }
+    if ($('#hof-clear')) {
+      $('#hof-clear').onclick = async () => {
+        if (!(await confirmModal({ title: '명예의 전당 기록을 모두 지울까요?', okText: '지우기', danger: true }))) return;
+        clearHallOfFame();
+        drawHof();
+      };
+    }
+    $('#m-close').onclick = closeModal;
+  };
+  drawHof();
+}
+
 function openAnalyticsLookupModal() {
   const codes = loadMyCloudCodes();
   openModal(`
@@ -1391,7 +1732,7 @@ async function openAnalyticsModal(rawCode, title = '') {
     <p class="m-title">📊 학급 복습 현황</p>
     <p class="m-desc">${title ? `“${esc(title)}” · ` : ''}코드 <b>${esc(code)}</b></p>
     <div id="dash-body" style="padding:20px;text-align:center;font-weight:800">☁️ 데이터를 불러오는 중...</div>
-    <div class="m-actions"><button type="button" class="pbtn gold" id="m-close">닫기</button></div>`, 'wide', 'info');
+    <div class="m-actions"><button type="button" class="pbtn blue hidden" id="an-csv">📥 엑셀(.csv) 내보내기</button><button type="button" class="pbtn gold" id="m-close">닫기</button></div>`, 'wide', 'info');
   $('#m-close').onclick = closeModal;
   try {
     const data = await fetchClassAnalytics(code);
@@ -1419,11 +1760,321 @@ async function openAnalyticsModal(rawCode, title = '') {
       : '<div class="hint">오답으로 기록된 문제가 없어요! 👏</div>'}
       <h4 style="margin:14px 0 6px">🕒 최근 기록</h4>
       <div class="log-list" style="max-height:160px">${data.recent.map(r => `<div><b>${esc(r.student_alias)}</b> · ${r.score}점 (⭕${r.correct_count} / ❌${r.wrong_count}) ${r.won ? '🏆' : ''}</div>`).join('')}</div>`;
+    const csvBtn = $('#an-csv');
+    if (csvBtn && data.allRows) {
+      csvBtn.classList.remove('hidden');
+      csvBtn.onclick = () => {
+        downloadCsv(`빙고퀴즈_학급현황_${code}.csv`, [
+          ['제출 시각', '학생', '점수', '정답 수', '오답 수', '승리 여부', '틀린 문제'],
+          ...data.allRows.map(r => [
+            new Date(r.created_at).toLocaleString('ko-KR'),
+            r.student_alias,
+            r.score,
+            r.correct_count,
+            r.wrong_count,
+            r.won ? '승' : '패/무',
+            Array.isArray(r.missed_questions) ? r.missed_questions.join(' / ') : ''
+          ])
+        ]);
+        toast('📥 학급 현황 CSV를 내려받았어요');
+      };
+    }
   } catch {
     const body = $('#dash-body');
     if (body) body.innerHTML = '<div class="set-info warn">⚠️ 현황 데이터를 불러오지 못했어요. 네트워크 연결이나 Supabase 테이블 설정을 확인해 주세요.</div>';
   }
 }
+
+/* ================= 실시간 교실 참여 방 (Host & Student) ================= */
+let liveRoom = null; // { ch, code, students: Set, tileVotes: Map, qAnswers: Map, qIndex: -1, status }
+let studentLive = null; // { ch, code, alias, state, question, votedTile, pickedAns, status }
+
+function genRoomCode() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < 6; i++) out += chars[(Math.random() * chars.length) | 0];
+  return out;
+}
+
+function broadcastLiveState() {
+  if (!liveRoom || !S) return;
+  liveRoom.ch.send('room_state', {
+    setName: S.setName,
+    round: S.round,
+    size: boardN(S),
+    over: !!S.over,
+    turnName: S.teams[S.turn]?.name || '',
+    turnEmoji: S.teams[S.turn]?.emoji || '',
+    tiles: S.tiles.map(t => ({ owner: t.owner, opened: t.opened })),
+    teams: S.teams.map((t, k) => ({ name: t.name, emoji: t.emoji, score: score(S, k) }))
+  });
+}
+
+function refreshLiveHostUI() {
+  const btn = $('#g-live');
+  if (btn) {
+    btn.classList.toggle('live-on', !!liveRoom);
+    btn.textContent = liveRoom ? `📡 방 ${liveRoom.code} (${liveRoom.students.size})` : '📡 실시간 방';
+  }
+  const respBox = $('#live-resp-box');
+  if (respBox && liveRoom && liveRoom.qIndex >= 0) {
+    const total = liveRoom.qAnswers.size;
+    respBox.classList.remove('hidden');
+    const q = S?.tiles[liveRoom.qIndex]?.q;
+    if (q && q.opts) {
+      const counts = new Map();
+      for (const ans of liveRoom.qAnswers.values()) counts.set(ans, (counts.get(ans) || 0) + 1);
+      respBox.innerHTML = `<b>📡 학생 실시간 응답 (${total}명)</b><div class="live-resp-bar">${[...counts.entries()].map(([k, v]) => `<span class="live-resp-pill">${esc(k)}: ${v}명</span>`).join('') || '<span>응답을 기다리는 중...</span>'}</div>`;
+    } else {
+      const list = [...liveRoom.qAnswers.entries()].slice(-5);
+      respBox.innerHTML = `<b>📡 학생 실시간 답안 (${total}명)</b><div class="live-resp-bar">${list.map(([stu, ans]) => `<span class="live-resp-pill">${esc(stu)}: ${esc(ans)}</span>`).join('') || '<span>답안을 기다리는 중...</span>'}</div>`;
+    }
+  }
+}
+
+function closeHostLiveRoom() {
+  if (!liveRoom) return;
+  try { liveRoom.ch.send('room_closed', {}); } catch {}
+  liveRoom.ch.close();
+  liveRoom = null;
+  refreshLiveHostUI();
+  if (S) renderBanner();
+}
+
+function startHostLiveRoom() {
+  if (liveRoom) return;
+  const code = genRoomCode();
+  const room = {
+    code,
+    students: new Set(),
+    tileVotes: new Map(),
+    qAnswers: new Map(),
+    qIndex: -1,
+    status: 'connecting',
+    ch: null
+  };
+  room.ch = createLiveChannel(code, {
+    onStatus(st) {
+      room.status = st;
+      refreshLiveHostUI();
+      if (st === 'connected') broadcastLiveState();
+    },
+    onMessage(ev, pl) {
+      if (ev === 'student_join') {
+        const who = String(pl.alias || '학생').slice(0, 16);
+        room.students.add(who);
+        refreshLiveHostUI();
+        broadcastLiveState();
+      } else if (ev === 'sync_req') {
+        broadcastLiveState();
+      } else if (ev === 'tile_vote') {
+        const who = String(pl.alias || '학생').slice(0, 16);
+        const idx = Number(pl.tile);
+        if (Number.isInteger(idx) && idx >= 0 && idx < (S ? S.tiles.length : 25)) {
+          room.students.add(who);
+          room.tileVotes.set(who, idx);
+          if (S && $('#screen-game').classList.contains('active')) renderBanner();
+        }
+      } else if (ev === 'q_answer') {
+        const who = String(pl.alias || '학생').slice(0, 16);
+        room.students.add(who);
+        if (pl.qIndex === room.qIndex) {
+          room.qAnswers.set(who, String(pl.answer || '').slice(0, 40));
+          refreshLiveHostUI();
+        }
+      }
+    }
+  });
+  liveRoom = room;
+  refreshLiveHostUI();
+}
+
+function openHostLiveModal() {
+  if (!S) return;
+  if (isPCBusyTurn()) { toast('🤖 PC 차례가 끝난 뒤 열어 주세요'); return; }
+  if (!liveRoom) startHostLiveRoom();
+  const baseUrl = location.href.split('#')[0].split('?')[0];
+  const joinUrl = `${baseUrl}?room=${liveRoom.code}`;
+  const qrSvg = makeQRSvg(joinUrl);
+  openModal(`
+    <p class="m-title">📡 실시간 교실 방</p>
+    <p class="m-desc">학생들이 휴대폰·태블릿에서 칸 투표와 문제 응답에 바로 참여해요.</p>
+    <div class="cloud-code-box">
+      <div style="font-size:13px;font-weight:800">참여 중인 학생: <b id="hl-cnt">${liveRoom.students.size}</b>명 · 연결: <b>${liveRoom.status === 'connected' ? '🟢 연결됨' : '🟡 연결 중'}</b></div>
+      <div class="cloud-code-val">${esc(liveRoom.code)}</div>
+      <div style="font-size:13px">학생 화면에서 <b>📡 실시간 방</b>을 누르거나 아래 QR을 스캔하세요</div>
+    </div>
+    <div class="share-qr-box">${qrSvg || ''}</div>
+    <div class="share-url-row">
+      <input id="hl-url" readonly value="${esc(joinUrl)}">
+      <button type="button" class="pbtn gold sm" id="hl-copy">📋 주소 복사</button>
+    </div>
+    <div class="m-actions">
+      <button type="button" class="pbtn bad" id="hl-stop">방 닫기</button>
+      <button type="button" class="pbtn gold" id="m-close">계속 진행</button>
+    </div>`, 'narrow', 'info');
+  $('#hl-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(joinUrl); toast('📋 참여 주소를 복사했어요!'); }
+    catch { toast(`방 코드: ${liveRoom.code}`); }
+  };
+  $('#hl-stop').onclick = () => { closeHostLiveRoom(); closeModal(); toast('실시간 방을 닫았어요'); };
+  $('#m-close').onclick = closeModal;
+}
+
+function renderLiveStudentScreen() {
+  if (!studentLive) return;
+  const stEl = $('#ls-status');
+  const metaEl = $('#ls-meta');
+  const stageEl = $('#ls-stage');
+  $('#ls-room-title').textContent = `📡 실시간 방 · ${studentLive.code}`;
+  stEl.textContent = studentLive.status === 'connected' ? '🟢 연결됨' : (studentLive.status === 'error' ? '🔴 연결 오류' : '🟡 연결 중');
+  stEl.className = 'live-status ' + (studentLive.status === 'connected' ? 'ok' : (studentLive.status === 'error' ? 'err' : ''));
+
+  const rs = studentLive.state;
+  if (!rs) {
+    metaEl.textContent = `참여자: ${studentLive.alias} · 교실 화면의 신호를 기다리는 중...`;
+    stageEl.innerHTML = '<div class="hint" style="text-align:center;padding:24px">선생님 화면과 연결되면 이곳에 빙고판과 문제가 나타납니다.</div>';
+    return;
+  }
+  metaEl.innerHTML = `<span>👤 ${esc(studentLive.alias)}</span><span>· ${rs.round}R · ${esc(rs.turnEmoji)} ${esc(rs.turnName)} 차례</span>`;
+
+  if (rs.over) {
+    stageEl.innerHTML = `<div class="set-info" style="text-align:center">🏁 경기가 종료되었습니다!<br>${(rs.teams || []).map(t => `${t.emoji} ${esc(t.name)} <b>${t.score}점</b>`).join(' · ')}</div>`;
+    return;
+  }
+
+  const q = studentLive.question;
+  if (q) {
+    const imgHtml = q.img && isSafeImageUrl(q.img) ? `<img class="q-img" src="${esc(q.img)}" alt="문제 그림" onerror="this.style.display='none'">` : '';
+    if (q.isMc && Array.isArray(q.opts)) {
+      stageEl.innerHTML = `
+        ${imgHtml}
+        <div class="q-text" style="font-size:20px;padding:8px 4px 12px">${formatRichText(q.q)}</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${q.opts.map((o, k) => `<button type="button" class="live-opt-btn ${studentLive.pickedAns === o ? 'picked' : ''}" data-lopt="${esc(o)}"><b>${'①②③④⑤⑥'[k]}</b> ${formatRichText(o)}</button>`).join('')}
+        </div>
+        <p class="hint" style="text-align:center">${studentLive.pickedAns ? `✅ “${esc(studentLive.pickedAns)}” 전송 완료!` : '정답이라고 생각하는 보기를 눌러 보세요'}</p>`;
+      stageEl.querySelectorAll('[data-lopt]').forEach(b => b.onclick = () => {
+        studentLive.pickedAns = b.dataset.lopt;
+        studentLive.ch.send('q_answer', { alias: studentLive.alias, qIndex: q.qIndex, answer: studentLive.pickedAns });
+        sfx('click');
+        renderLiveStudentScreen();
+      });
+    } else {
+      stageEl.innerHTML = `
+        ${imgHtml}
+        <div class="q-text" style="font-size:20px;padding:8px 4px 12px">${formatRichText(q.q)}</div>
+        <form id="ls-sa-form" class="q-sa-form">
+          <input id="ls-sa-inp" placeholder="정답 입력" value="${esc(studentLive.pickedAns || '')}" autocomplete="off">
+          <button type="submit" class="pbtn gold">전송</button>
+        </form>
+        <p class="hint" style="text-align:center">${studentLive.pickedAns ? `✅ “${esc(studentLive.pickedAns)}” 전송 완료!` : '답안을 입력해 선생님 화면으로 보낼 수 있어요'}</p>`;
+      $('#ls-sa-form').onsubmit = e => {
+        e.preventDefault();
+        const val = $('#ls-sa-inp').value.trim();
+        if (!val) return;
+        studentLive.pickedAns = val;
+        studentLive.ch.send('q_answer', { alias: studentLive.alias, qIndex: q.qIndex, answer: val });
+        sfx('click');
+        renderLiveStudentScreen();
+      };
+    }
+    return;
+  }
+
+  const N = rs.size || 5;
+  stageEl.innerHTML = `
+    <p class="hint" style="text-align:center;margin:0 0 8px">열리지 않은 번호 칸을 눌러 다음 도전 칸에 투표하세요!</p>
+    <div class="live-grid" style="--ln:${N}">
+      ${(rs.tiles || []).map((t, i) => `<button type="button" class="live-tile-btn ${t.opened ? 'opened' : ''} ${studentLive.votedTile === i ? 'voted' : ''}" data-ltile="${i}" ${t.opened ? 'disabled' : ''}>${t.opened ? (t.owner >= 0 && rs.teams[t.owner] ? rs.teams[t.owner].emoji : '·') : (i + 1)}</button>`).join('')}
+    </div>`;
+  stageEl.querySelectorAll('[data-ltile]').forEach(b => b.onclick = () => {
+    const idx = +b.dataset.ltile;
+    studentLive.votedTile = idx;
+    studentLive.ch.send('tile_vote', { alias: studentLive.alias, tile: idx });
+    sfx('click');
+    renderLiveStudentScreen();
+    toast(`📡 ${idx + 1}번 칸에 투표했어요!`);
+  });
+}
+
+function leaveStudentLiveRoom() {
+  if (studentLive) {
+    studentLive.ch.close();
+    studentLive = null;
+  }
+  show('title');
+}
+
+function joinStudentLiveRoom(code, alias) {
+  if (studentLive) studentLive.ch.close();
+  const cleanAlias = (alias || '학생').trim().slice(0, 12) || '학생';
+  const sl = {
+    code,
+    alias: cleanAlias,
+    status: 'connecting',
+    state: null,
+    question: null,
+    votedTile: -1,
+    pickedAns: '',
+    ch: null
+  };
+  sl.ch = createLiveChannel(code, {
+    onStatus(st) {
+      sl.status = st;
+      renderLiveStudentScreen();
+      if (st === 'connected') {
+        sl.ch.send('student_join', { alias: sl.alias });
+        sl.ch.send('sync_req', {});
+      }
+    },
+    onMessage(ev, pl) {
+      if (ev === 'room_state') {
+        sl.state = pl;
+        sl.votedTile = -1;
+        renderLiveStudentScreen();
+      } else if (ev === 'question') {
+        sl.question = pl;
+        sl.pickedAns = '';
+        renderLiveStudentScreen();
+      } else if (ev === 'question_closed') {
+        sl.question = null;
+        sl.pickedAns = '';
+        renderLiveStudentScreen();
+      } else if (ev === 'room_closed') {
+        toast('선생님이 실시간 방을 닫았어요');
+        leaveStudentLiveRoom();
+      }
+    }
+  });
+  studentLive = sl;
+  show('live-student');
+  renderLiveStudentScreen();
+}
+
+function openLiveJoinModal() {
+  openModal(`
+    <p class="m-title">📡 실시간 교실 방 참여</p>
+    <p class="m-desc">선생님 화면에 표시된 6자리 방 코드와 내 이름을 입력하세요.</p>
+    <form id="lj-form" class="tm-grid" style="margin-top:12px">
+      <input id="lj-code" class="ed-field" maxlength="8" placeholder="6자리 방 코드 (예: K4M8P2)" style="text-align:center;text-transform:uppercase;letter-spacing:4px">
+      <input id="lj-alias" class="ed-field" maxlength="12" value="${esc(setup.solo.name === '나' ? '' : setup.solo.name)}" placeholder="내 이름 또는 학번">
+      <div class="m-actions">
+        <button type="submit" class="pbtn gold big">📡 방 들어가기</button>
+        <button type="button" class="pbtn white" id="m-close">닫기</button>
+      </div>
+    </form>`, 'narrow', 'info');
+  $('#m-close').onclick = closeModal;
+  $('#lj-form').onsubmit = e => {
+    e.preventDefault();
+    const code = normalizeRoomCode($('#lj-code').value);
+    if (!code) { toast('6자리 방 코드를 정확히 입력해 주세요'); return; }
+    const alias = $('#lj-alias').value.trim() || '학생';
+    closeModal();
+    joinStudentLiveRoom(code, alias);
+  };
+}
+$('#ls-exit').onclick = leaveStudentLiveRoom;
 
 /* ================= 게임 상태 · 렌더링 ================= */
 let S = null;
@@ -1625,6 +2276,7 @@ function render() {
   renderTop();
   renderBanner();
   save();
+  if (liveRoom) broadcastLiveState();
 }
 
 function renderBingoLines() {
@@ -1686,7 +2338,7 @@ function renderBoard() {
     let style = '';
     if (t.owner >= 0) {
       const tm = S.teams[t.owner];
-      cls += ' owned pat' + t.owner;
+      cls += ' owned pat' + (t.owner % 6);
       style = `--f:${tm.color};--s:${tm.dark};--h:${tm.light}`;
     } else if (t.opened) {
       cls += ' empty';
@@ -1724,6 +2376,7 @@ function renderBoard() {
 function renderTeams() {
   const L = $('#side-left');
   const R = $('#side-right');
+  $('#arena').classList.toggle('compact-sides', S.teams.length >= 5);
   L.innerHTML = '';
   R.innerHTML = '';
   const scores = S.teams.map((_, k) => score(S, k));
@@ -1739,7 +2392,7 @@ function renderTeams() {
     if (t.double) st.push('<span title="2배 찬스">✨2배</span>');
     if (k === S.turn && S.extra) st.push('<span>⏩한 번 더</span>');
     el.innerHTML = `<button type="button" class="tcard-manage" data-manage="${k}" title="${esc(t.name)} 점수·상태·차례 관리" aria-label="${esc(t.name)} 관리">⚙️</button>
-      <div class="ava">${t.emoji}</div><div class="nm"><span class="swatch pat${k}" title="우리 팀 땅 무늬"></span>${esc(t.name)}</div><div class="sc">${scores[k]}</div>
+      <div class="ava">${t.emoji}</div><div class="nm"><span class="swatch pat${k % 6}" title="우리 팀 땅 무늬"></span>${esc(t.name)}</div><div class="sc">${scores[k]}</div>
       <div class="meta"><span>🏳️ ${tileCount(S, k)}칸</span><span>🎯 ${bingoCount(S, k)}줄</span><span>💰 ${t.bonus >= 0 ? '+' : ''}${t.bonus}</span></div>
       <div class="st">${st.join('')}</div>
       <div class="adj"><button data-adj="${k}" data-v="-10">−10</button><button data-adj="${k}" data-v="10">+10</button></div>`;
@@ -1783,6 +2436,7 @@ function renderTop() {
   $('#undo-cnt').textContent = `(${undoStack.length})`;
   const fsOn = !!document.fullscreenElement;
   $('#g-fs').textContent = fsOn ? '⛶ 창모드' : '⛶ 전체화면';
+  refreshLiveHostUI();
   const mBgm = $('[data-more="bgm"]');
   const mSfx = $('[data-more="sfx"]');
   const mVol = $('[data-more="vol"]');
@@ -1791,6 +2445,17 @@ function renderTop() {
   if (mSfx) mSfx.textContent = AU.sfx ? '♪ 효과음 (켜짐)' : '♪ 효과음 (꺼짐)';
   if (mVol) mVol.textContent = `${volLabel()} (음량)`;
   if (mFs) mFs.textContent = fsOn ? '⛶ 전체화면 끄기' : '⛶ 전체화면';
+}
+
+function getTopTileVote() {
+  if (!liveRoom || !liveRoom.tileVotes.size || !S) return null;
+  const counts = new Map();
+  for (const idx of liveRoom.tileVotes.values()) {
+    if (S.tiles[idx] && !S.tiles[idx].opened) counts.set(idx, (counts.get(idx) || 0) + 1);
+  }
+  if (!counts.size) return null;
+  const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { idx: best[0], count: best[1] };
 }
 
 function renderBanner() {
@@ -1804,6 +2469,8 @@ function renderBanner() {
   }
   const goalTag = S.settings.bingoGoal ? `<span class="goal-pill">🎯 목표 ${S.settings.bingoGoal}줄</span>` : '';
   const comboTag = (t.combo || 0) >= 2 ? `<span class="combo-pill">🔥 ${t.combo}연속</span>` : '';
+  const voteTop = !S.pending ? getTopTileVote() : null;
+  const voteTag = voteTop ? `<span class="live-vote-pill">📡 투표 1위: ${voteTop.idx + 1}번 (${voteTop.count}명)</span>` : '';
   if (t.isAI) {
     const left = S.tiles.filter(x => !x.opened).length;
     const msg = S.pending ? '🤖 PC가 카드 효과를 사용하는 중...' : '🤖 PC가 도전할 칸을 고르고 있어요...';
@@ -1825,7 +2492,7 @@ function renderBanner() {
     b.innerHTML = `<span class="b-e">${t.emoji}</span><span><b>${esc(t.name)}</b> · ${msg}</span><button type="button" class="pbtn sm ghost" id="skip-pending">건너뛰기</button>`;
   } else {
     const left = S.tiles.filter(x => !x.opened).length;
-    b.innerHTML = `<span class="b-e">${t.emoji}</span><span><b>${esc(t.name)}</b> 차례! 도전할 칸을 골라 주세요</span>${goalTag}${comboTag}<span style="font-size:.82em;color:var(--muted)">남은 칸 ${left}</span>`;
+    b.innerHTML = `<span class="b-e">${t.emoji}</span><span><b>${esc(t.name)}</b> 차례! 도전할 칸을 골라 주세요</span>${goalTag}${comboTag}${voteTag}<span style="font-size:.82em;color:var(--muted)">남은 칸 ${left}</span>`;
   }
 }
 
@@ -1841,9 +2508,11 @@ function openQuickSettings() {
       <div class="opt-row"><label>배경 테마</label><select id="qs-theme"><option value="forest">🍂 가을 숲</option><option value="ocean">🌊 바닷속</option><option value="space">🚀 우주 (다크)</option><option value="chalkboard">🖍️ 칠판 다크</option></select></div>
       <div class="opt-row"><label>배경 음악 분위기</label><select id="qs-bgm"><option value="upbeat">🎶 활기찬 대결</option><option value="calm">🎵 차분한 복습</option></select></div>
       <div class="opt-row"><label>제한 시간</label><select id="qs-timer"><option value="0">없음</option><option value="15">15초</option><option value="20">20초</option><option value="30">30초</option><option value="60">60초</option></select></div>
+      <div class="opt-row"><label for="qs-ttsauto">🔊 문제 자동 읽어주기</label><input type="checkbox" id="qs-ttsauto"></div>
+      <div class="opt-row"><label>읽기 속도</label><select id="qs-ttsrate"><option value="0.8">🐢 천천히</option><option value="1">보통</option><option value="1.15">🐇 빠르게</option></select></div>
       <div class="opt-row"><label for="qs-autonext">정답 후 자동 넘김</label><input type="checkbox" id="qs-autonext"></div>
       <div class="opt-row"><label for="qs-reach">빙고 직전 🔥 힌트</label><input type="checkbox" id="qs-reach"></div>
-      <div class="opt-row"><label for="qs-hint50">💡 50:50 찬스 허용</label><input type="checkbox" id="qs-hint50"></div>
+      <div class="opt-row"><label for="qs-hint50">💡 힌트 찬스 허용</label><input type="checkbox" id="qs-hint50"></div>
       <div class="opt-row"><label for="qs-motion">애니메이션 줄이기</label><input type="checkbox" id="qs-motion"></div>
       ${isSolo ? `<div class="opt-row"><label for="qs-aifast">⏩ PC 차례 빠르게</label><input type="checkbox" id="qs-aifast"></div>` : ''}
     </div>
@@ -1852,6 +2521,8 @@ function openQuickSettings() {
   $('#qs-theme').value = st.theme || 'forest';
   $('#qs-bgm').value = st.bgmStyle || 'upbeat';
   $('#qs-timer').value = String(st.timer || 0);
+  $('#qs-ttsauto').checked = !!st.ttsAuto;
+  $('#qs-ttsrate').value = String(st.ttsRate || 1);
   $('#qs-autonext').checked = !!st.autoNext;
   $('#qs-reach').checked = !!st.reachHint;
   $('#qs-hint50').checked = !!st.hint5050;
@@ -1862,19 +2533,25 @@ function openQuickSettings() {
     st.theme = $('#qs-theme').value;
     st.bgmStyle = $('#qs-bgm').value;
     st.timer = +$('#qs-timer').value;
+    st.ttsAuto = $('#qs-ttsauto').checked;
+    st.ttsRate = +$('#qs-ttsrate').value || 1;
     st.autoNext = $('#qs-autonext').checked;
     st.reachHint = $('#qs-reach').checked;
     st.hint5050 = $('#qs-hint50').checked;
     st.reduceMotion = $('#qs-motion').checked;
     if ($('#qs-aifast')) st.aiFast = $('#qs-aifast').checked;
-    Object.assign(setup.settings, { theme: st.theme, bgmStyle: st.bgmStyle, timer: st.timer, autoNext: st.autoNext, reachHint: st.reachHint, hint5050: st.hint5050, reduceMotion: st.reduceMotion, aiFast: st.aiFast });
+    Object.assign(setup.settings, {
+      theme: st.theme, bgmStyle: st.bgmStyle, timer: st.timer,
+      ttsAuto: st.ttsAuto, ttsRate: st.ttsRate, autoNext: st.autoNext,
+      reachHint: st.reachHint, hint5050: st.hint5050, reduceMotion: st.reduceMotion, aiFast: st.aiFast
+    });
     saveSetup();
     applyTheme(st.theme);
     applyMotion(st.reduceMotion);
     setBgmStyle(st.bgmStyle);
     render();
   };
-  ['#qs-theme', '#qs-bgm', '#qs-timer', '#qs-autonext', '#qs-reach', '#qs-hint50', '#qs-motion', '#qs-aifast'].forEach(sel => {
+  ['#qs-theme', '#qs-bgm', '#qs-timer', '#qs-ttsauto', '#qs-ttsrate', '#qs-autonext', '#qs-reach', '#qs-hint50', '#qs-motion', '#qs-aifast'].forEach(sel => {
     const el = $(sel);
     if (el) el.addEventListener('change', sync);
   });
@@ -1992,11 +2669,18 @@ function openQuestion(i) {
   const opts = q.opts ? shuffle([...q.opts]) : null;
   const isSolo = S.settings.playMode === 'solo';
   const isSoloSA = !opts && isSolo && !team.isAI;
-  const canHint = !!(opts && opts.length >= 4 && S.settings.hint5050 && (team.hintsLeft || 0) > 0);
+  const canHintMC = !!(opts && opts.length >= 4 && S.settings.hint5050 && (team.hintsLeft || 0) > 0);
+  const canHintSA = !!(!opts && S.settings.hint5050 && (team.hintsLeft || 0) > 0 && makeChosungHint(q.a));
   const longCls = q.q.length > 65 ? ' long' : '';
   const speech = getSpeechSpec(q.q);
   const ttsBtn = isTtsSupported() ? `<button type="button" class="q-tts-btn" id="q-tts" title="문제 읽어주기">🔊 읽기</button>` : '';
-  const imgHtml = q.img && isSafeImageUrl(q.img) ? `<img class="q-img" src="${esc(q.img)}" alt="문제 그림">` : '';
+  const imgHtml = q.img && isSafeImageUrl(q.img) ? `<img class="q-img" src="${esc(q.img)}" alt="문제 그림" onerror="this.style.display='none'">` : '';
+
+  if (liveRoom) {
+    liveRoom.qIndex = i;
+    liveRoom.qAnswers.clear();
+    liveRoom.ch.send('question', { qIndex: i, q: q.q, opts, isMc: !!opts, img: q.img || '' });
+  }
 
   const box = openModal(`
     <div class="q-head" style="--c:${team.color}">
@@ -2014,20 +2698,32 @@ function openQuestion(i) {
       <button type="button" class="pbtn sm white" id="q-plus10" title="10초 추가 (+)">+10초</button>
     </div>` : ''}
     ${imgHtml}
-    <div class="q-text${longCls}">${esc(q.q)}</div>
-    ${opts ? `<div class="q-opts">${opts.map((o, k) => `<button class="q-opt" data-k="${k}"><b>${'①②③④⑤⑥'[k]}</b>${esc(o)}<kbd class="kh">${k + 1}</kbd></button>`).join('')}</div>`
+    <div class="q-text${longCls}">${formatRichText(q.q)}</div>
+    <div id="q-hint-box" class="q-hint-box hidden"></div>
+    ${opts ? `<div class="q-opts">${opts.map((o, k) => `<button class="q-opt" data-k="${k}"><b>${'①②③④⑤⑥'[k]}</b>${formatRichText(o)}<kbd class="kh">${k + 1}</kbd></button>`).join('')}</div>`
       : `${isSoloSA ? `<form class="q-sa-form" id="q-sa-form"><input type="text" id="q-sa-input" placeholder="정답을 입력하고 Enter" autocomplete="off"><button type="submit" class="pbtn gold" id="q-sa-submit">제출</button></form>` : ''}
-         <div class="q-answer" id="q-answer">정답: <b>${esc(q.a)}</b></div>`}
-    ${q.explain ? `<div class="q-explain hidden" id="q-explain">💡 <b>해설:</b> ${esc(q.explain)}</div>` : ''}
+         <div class="q-answer" id="q-answer">정답: <b>${formatRichText(q.a)}</b></div>`}
+    ${q.explain ? `<div class="q-explain hidden" id="q-explain">💡 <b>해설:</b> ${formatRichText(q.explain)}</div>` : ''}
+    <div id="live-resp-box" class="live-resp-box hidden"></div>
     <div class="q-msg" id="q-msg"></div>
     <div class="q-actions" id="q-actions">
       ${opts ? '' : (isSoloSA ? `<button class="pbtn white" id="q-reveal">👀 정답 확인 (직접 채점)</button>` : `<button class="pbtn gold" id="q-reveal">👀 정답 보기<kbd class="kh">Space</kbd></button><button class="pbtn ok" id="q-ok">⭕ 맞혔어요<kbd class="kh">O</kbd></button><button class="pbtn bad" id="q-no">❌ 틀렸어요<kbd class="kh">X</kbd></button>`)}
-      ${canHint ? `<button type="button" class="pbtn blue" id="q-hint">💡 50:50 찬스 (${team.hintsLeft})</button>` : ''}
+      ${canHintMC ? `<button type="button" class="pbtn blue" id="q-hint">💡 50:50 찬스 (${team.hintsLeft})</button>` : ''}
+      ${canHintSA ? `<button type="button" class="pbtn blue" id="q-sa-hint">💡 초성·철자 힌트 (${team.hintsLeft})</button>` : ''}
       ${isSolo ? '' : `<button class="pbtn ghost" id="q-cancel">↩ 문제 닫기 (다른 칸 고르기)<kbd class="kh">Esc</kbd></button>`}
-    </div>`, '', 'question');
+    </div>`, '', 'question', () => {
+      if (liveRoom) {
+        liveRoom.qIndex = -1;
+        liveRoom.ch.send('question_closed', {});
+      }
+    });
 
   box.style.setProperty('--qscale', qScale);
-  if ($('#q-tts')) $('#q-tts').onclick = () => speakText(speech.text, speech.lang);
+  refreshLiveHostUI();
+  if ($('#q-tts')) $('#q-tts').onclick = () => speakText(speech.text, speech.lang, S.settings.ttsRate || 1);
+  if (S.settings.ttsAuto && isTtsSupported()) {
+    setTimeout(() => { if ($('#modal').classList.contains('show')) speakText(speech.text, speech.lang, S.settings.ttsRate || 1); }, 120);
+  }
   $('#q-fdec').onclick = () => { qScale = Math.max(0.8, +(qScale - 0.1).toFixed(2)); box.style.setProperty('--qscale', qScale); store('bq_qscale', qScale); };
   $('#q-finc').onclick = () => { qScale = Math.min(1.35, +(qScale + 0.1).toFixed(2)); box.style.setProperty('--qscale', qScale); store('bq_qscale', qScale); };
 
@@ -2039,7 +2735,7 @@ function openQuestion(i) {
     if (answered) return;
     answered = true;
     stopTimer();
-    box.querySelectorAll('.q-opt,#q-reveal,#q-ok,#q-no,#q-cancel,#q-pause,#q-plus10,#q-sa-input,#q-sa-submit,#q-hint').forEach(b => { b.disabled = true; });
+    box.querySelectorAll('.q-opt,#q-reveal,#q-ok,#q-no,#q-cancel,#q-pause,#q-plus10,#q-sa-input,#q-sa-submit,#q-hint,#q-sa-hint').forEach(b => { b.disabled = true; });
     revealExplain();
     const nextLbl = ok && S.settings.rewards ? '🎁 보상 카드 뽑기 ▶' : '다음으로 ▶';
     const act = $('#q-actions');
@@ -2071,6 +2767,21 @@ function openQuestion(i) {
       $('#q-hint').textContent = '💡 50:50 사용됨';
       sfx('hint');
       addLog(`${team.emoji} ${team.name}: 💡 50:50 찬스 사용`);
+    };
+  }
+  if ($('#q-sa-hint')) {
+    $('#q-sa-hint').onclick = () => {
+      if (answered || (team.hintsLeft || 0) <= 0) return;
+      const hintTxt = makeChosungHint(q.a);
+      if (!hintTxt) return;
+      team.hintsLeft--;
+      const hb = $('#q-hint-box');
+      hb.textContent = `💡 힌트: ${hintTxt}`;
+      hb.classList.remove('hidden');
+      $('#q-sa-hint').disabled = true;
+      $('#q-sa-hint').textContent = '💡 힌트 사용됨';
+      sfx('hint');
+      addLog(`${team.emoji} ${team.name}: 💡 초성·철자 힌트 사용`);
     };
   }
 
@@ -2105,7 +2816,7 @@ function openQuestion(i) {
         stopTimer();
         sfx('wrong');
         vibrate([30, 40, 30]);
-        box.querySelectorAll('#q-reveal,#q-cancel,#q-pause,#q-plus10,#q-sa-input,#q-sa-submit').forEach(b => { b.disabled = true; });
+        box.querySelectorAll('#q-reveal,#q-cancel,#q-pause,#q-plus10,#q-sa-input,#q-sa-submit,#q-sa-hint').forEach(b => { b.disabled = true; });
         $('#q-msg').textContent = `❌ 입력: “${val}” — 정답과 달라요`;
         const act = $('#q-actions');
         act.innerHTML = `<button type="button" class="pbtn ok" id="q-sa-override">⭕ 사실 맞았어요<kbd class="kh">O</kbd></button><button type="button" class="pbtn bad" id="q-sa-confirm-no">❌ 틀림으로 진행 ▶<kbd class="kh">X</kbd></button>`;
@@ -2121,7 +2832,7 @@ function openQuestion(i) {
       sfx('flip');
       $('#q-answer').classList.add('show');
       revealExplain();
-      box.querySelectorAll('#q-reveal,#q-cancel,#q-pause,#q-plus10,#q-sa-input,#q-sa-submit').forEach(b => { b.disabled = true; });
+      box.querySelectorAll('#q-reveal,#q-cancel,#q-pause,#q-plus10,#q-sa-input,#q-sa-submit,#q-sa-hint').forEach(b => { b.disabled = true; });
       const act = $('#q-actions');
       act.innerHTML = `<button type="button" class="pbtn ok" id="q-sa-override">⭕ 맞혔어요<kbd class="kh">O</kbd></button><button type="button" class="pbtn bad" id="q-sa-confirm-no">❌ 틀렸어요 ▶<kbd class="kh">X</kbd></button>`;
       $('#q-sa-override').onclick = () => { sfx('correct'); goNextNow(true); };
@@ -2269,6 +2980,7 @@ async function endTurn() {
   const sid = gameSession;
   S.pending = null;
   S.phase = null;
+  if (liveRoom) liveRoom.tileVotes.clear();
   if (!S.tiles.some(t => !t.opened)) {
     render();
     await sleep(300);
@@ -2314,10 +3026,9 @@ async function endTurn() {
   if (!S.over && S.teams[S.turn]?.isAI) scheduleAITurn();
 }
 
-async function submitSoloCloudIfNeeded() {
-  if (!S || !S.shareCode || S.cloudSubmitted || S.settings.playMode !== 'solo') return;
-  S.cloudSubmitted = true;
-  save();
+async function submitSoloCloudIfNeeded(manualRetry = false) {
+  if (!S || !S.shareCode || S.settings.playMode !== 'solo') return;
+  if (S.cloudSubmitted && !manualRetry) return;
   const { rank } = computeStanding(S);
   const h = S.teams[0];
   const missed = S.tiles.filter(t => t.q && t.fails > 0).map(t => t.q.q);
@@ -2333,11 +3044,21 @@ async function submitSoloCloudIfNeeded() {
       won: rank(0) < rank(1),
       missedQuestions: missed
     });
-    if (res.ok && statusEl) {
-      statusEl.innerHTML = `<span>☁️ 선생님께 복습 결과를 전송했어요 (${esc(S.shareCode)})</span>`;
-      statusEl.classList.remove('hidden');
+    if (res.ok) {
+      S.cloudSubmitted = true;
+      save();
+      if (statusEl) {
+        statusEl.innerHTML = `<span>☁️ 선생님께 복습 결과를 전송했어요 (${esc(S.shareCode)})</span>`;
+        statusEl.classList.remove('hidden');
+      }
+      return;
     }
   } catch {}
+  if (statusEl) {
+    statusEl.innerHTML = `<span>⚠️ 복습 결과 전송이 보류됐어요 (${esc(S.shareCode)})</span><button type="button" class="pbtn sm blue" id="res-cloud-retry">☁️ 다시 전송</button>`;
+    statusEl.classList.remove('hidden');
+    $('#res-cloud-retry').onclick = () => submitSoloCloudIfNeeded(true);
+  }
 }
 
 async function gameOver(reason) {
@@ -2416,9 +3137,9 @@ async function runAIQuestion(i, sid) {
       <span>🤖 PC 도전! (${(AI_CONF[team.aiLevel || 'normal'] || AI_CONF.normal).label})</span>
       <div class="q-head-r"><span class="q-no">${i + 1}번 문제${tile.fails ? ` · ${tile.fails}번 틀린 문제` : ''}</span></div>
     </div>
-    <div class="q-text${longCls}">${esc(q.q)}</div>
-    ${opts ? `<div class="q-opts">${opts.map((o, k) => `<button class="q-opt" data-k="${k}" disabled><b>${'①②③④⑤⑥'[k]}</b>${esc(o)}</button>`).join('')}</div>`
-      : `<div class="q-answer" id="q-answer">정답: <b>${esc(q.a)}</b></div>`}
+    <div class="q-text${longCls}">${formatRichText(q.q)}</div>
+    ${opts ? `<div class="q-opts">${opts.map((o, k) => `<button class="q-opt" data-k="${k}" disabled><b>${'①②③④⑤⑥'[k]}</b>${formatRichText(o)}</button>`).join('')}</div>`
+      : `<div class="q-answer" id="q-answer">정답: <b>${formatRichText(q.a)}</b></div>`}
     <div class="q-msg" id="q-msg">🤖 생각하는 중...</div>
     <div class="q-actions"><button type="button" class="pbtn sm white" id="ai-skip">⏩ 빠르게<kbd class="kh">Space</kbd></button></div>`, '', 'ai-question');
   box.style.setProperty('--qscale', qScale);
@@ -2551,7 +3272,14 @@ async function runAIPending(sid) {
 function drawCards(n = 3) {
   const isAI = !!(S.teams[S.turn] && S.teams[S.turn].isAI);
   const isSolo = S.settings.playMode === 'solo';
-  const pool = REWARDS.filter(r => (r.kind === 'good' || S.settings.penalties) && (!r.strong || S.settings.strong) && (!isAI || r.id !== 'mission')).map(r => ({ ...r }));
+  const dis = new Set(S.settings.disabledRewards || []);
+  const catchup = isCatchupEligible(S, S.turn);
+  let pool = REWARDS
+    .filter(r => !dis.has(r.id) && (r.kind === 'good' || S.settings.penalties) && (!r.strong || S.settings.strong) && (!isAI || r.id !== 'mission'))
+    .map(r => ({ ...r, w: catchup && r.kind === 'good' ? r.w * 1.45 : r.w }));
+  if (pool.length < n) {
+    pool = REWARDS.filter(r => r.kind === 'good' && (!isAI || r.id !== 'mission')).map(r => ({ ...r }));
+  }
   const out = [];
   while (out.length < n && pool.length) {
     const tot = pool.reduce((s, r) => s + r.w, 0);
@@ -2900,6 +3628,9 @@ function showResult() {
   const awards = computeAwards(S, order, scores, rank);
   const soloEl = $('#res-solo-stats');
   $('#res-cloud-status').classList.add('hidden');
+  $('#r-hof-save').disabled = !!S.hofSaved;
+  $('#r-hof-save').textContent = S.hofSaved ? '✅ 명예의 전당 기록됨' : '🏆 명예의 전당 기록';
+
   if (S.settings.playMode === 'solo' && S.teams.length === 2) {
     const hRank = rank(0);
     const aRank = rank(1);
@@ -2913,13 +3644,13 @@ function showResult() {
     soloEl.classList.add('hidden');
   }
   const podOrder = order.length >= 3 ? [order[1], order[0], order[2], ...order.slice(3)] : [order[1], order[0]];
-  const H = { 1: 220, 2: 165, 3: 120, 4: 92 };
-  const M = { 1: '🥇', 2: '🥈', 3: '🥉', 4: '🎖️' };
+  const H = { 1: 220, 2: 165, 3: 120, 4: 92, 5: 76, 6: 66 };
+  const M = { 1: '🥇', 2: '🥈', 3: '🥉', 4: '🎖️', 5: '🎖️', 6: '🎖️' };
   $('#podium').innerHTML = podOrder.map(k => {
     const t = S.teams[k];
     const r = rank(k);
     return `<div class="pod"><div class="medal">${M[r] || '🎖️'}</div><div class="e">${t.emoji}</div><div class="award">${awards[k]}</div>
-      <div class="bar" style="--c:${t.color};--d:${t.dark};height:${H[r] || 92}px"><span class="n">${esc(t.name)}</span><span class="s">${scores[k]}</span><span>${r}위</span></div></div>`;
+      <div class="bar" style="--c:${t.color};--d:${t.dark};height:${H[r] || 70}px"><span class="n">${esc(t.name)}</span><span class="s">${scores[k]}</span><span>${r}위</span></div></div>`;
   }).join('');
   $('#res-table').innerHTML = `<tr><th>팀</th><th>순위</th><th>칸</th><th>빙고</th><th>보너스</th><th>총점</th><th>칭찬 배지</th></tr>` +
     order.map(k => {
@@ -2963,10 +3694,10 @@ function openReviewModal() {
           <span class="rev-badge ok">${t.idx + 1}번 칸</span>
           ${t.fails ? `<span class="rev-badge">✖ ${t.fails}번 틀림</span>` : '<span class="rev-badge ok">⭕ 한 번에 정답</span>'}
         </div>
-        ${t.q.img && isSafeImageUrl(t.q.img) ? `<img class="q-img" style="max-height:150px" src="${esc(t.q.img)}" alt="문제 그림">` : ''}
-        <div class="rev-q">${esc(t.q.q)}</div>
-        <div class="rev-a ${hideAns ? 'blur' : ''}">정답: ${esc(t.q.a)}</div>
-        ${t.q.explain ? `<div class="rev-ex">💡 ${esc(t.q.explain)}</div>` : ''}
+        ${t.q.img && isSafeImageUrl(t.q.img) ? `<img class="q-img" style="max-height:150px" src="${esc(t.q.img)}" alt="문제 그림" onerror="this.style.display='none'">` : ''}
+        <div class="rev-q">${formatRichText(t.q.q)}</div>
+        <div class="rev-a ${hideAns ? 'blur' : ''}">정답: ${formatRichText(t.q.a)}</div>
+        ${t.q.explain ? `<div class="rev-ex">💡 ${formatRichText(t.q.explain)}</div>` : ''}
       </div>`).join('') : '<div class="hint" style="text-align:center;padding:24px">해당하는 문제가 없어요! 👏</div>';
   };
   box.querySelectorAll('[data-rtab]').forEach(b => b.onclick = () => { tab = b.dataset.rtab; draw(); });
@@ -3030,19 +3761,19 @@ function howtoHTML() {
   const rw = REWARDS.map(r => `<div class="rw ${r.kind}"><span class="i">${r.icon}</span><div><b>${r.name}</b>${r.strong ? ' <small>(강력)</small>' : ''}<br>${r.id === 'mission' ? '팀이 함께 재미있는 미션을 해요.' : r.desc}</div></div>`).join('');
   return `<div class="howto">
     <h2>❓ 게임 방법</h2>
-    <h4>1. 게임 시작 · 1인 플레이 & 팀 대결</h4>
-    <ul><li>처음 화면에서 <b>🤖 1인 플레이 (vs PC)</b>를 누르면 PC(쉬움·보통·어려움)와 혼자서 1:1 대결을 바로 시작할 수 있고, 세트별 별점(★~★★★)과 전적이 저장돼요.</li>
-    <li>팀 대결에서는 <b>3×3 · 4×4 · 5×5</b> 빙고판에서 팀마다 차례대로 칸을 골라 문제를 풀어요. 목표 빙고(1~3줄 먼저 완성 시 승리)와 게임 중 <b>⚙️ 설정</b>도 지원해요.</li></ul>
+    <h4>1. 게임 시작 · 1인 플레이 & 2~6팀 대결 · 실시간 방</h4>
+    <ul><li>처음 화면에서 <b>🤖 1인 플레이 (vs PC)</b>, <b>👥 팀 대결(최대 6팀)</b>, <b>📡 실시간 방 참여</b>, <b>🏛️ 공개 문제 창고</b>를 바로 열 수 있어요.</li>
+    <li>팀 대결 중 상단의 <b>📡 실시간 방</b>을 열면 학생들이 스마트폰으로 칸 투표와 답안 제출에 실시간으로 참여할 수 있어요.</li></ul>
     <h4>2. 점수 계산 · 힌트 · 읽어주기</h4>
     <ul><li><b>총점 = 칸 점수 × 칸 수 + 빙고 점수 × 빙고 줄 수 + 보너스 점수</b></li>
-    <li>빙고 줄이 완성되면 보드 위에 팀 색 선이 그려지고, 1칸만 남은 칸은 🔥로 표시돼요. 3연속 정답부터 🔥 콤보가 쌓여요!</li>
-    <li>객관식에서는 게임당 1회 <b>💡 50:50 찬스</b>(오답 2개 지우기)와 <b>🔊 읽어주기(TTS)</b>를 쓸 수 있어요.</li></ul>
+    <li>객관식에서는 게임당 1회 <b>💡 50:50 찬스</b>, 주관식에서는 <b>💡 초성·철자 힌트</b>와 <b>🔊 읽어주기(자동/속도 조절)</b>를 쓸 수 있어요.</li>
+    <li><b>⚡ 역전 보정</b>을 켜면 30점 이상 뒤처진 팀에게 좋은 보상 카드가 나올 확률이 높아져요.</li></ul>
     <h4>3. 보상 카드 (정답을 맞히면 1·2·3 카드 중 고르기)</h4>
     <div class="rw-grid">${rw}</div>
     <h4>4. 선생님용 편의 기능 · 공유 코드 · 인쇄 · 단축키</h4>
-    <ul><li><b>🔗 코드·QR 공유</b>로 6자리 공유 코드 또는 오프라인 QR을 만들고, <b>📊 학급 복습 현황</b>에서 참여자 평균과 최다 오답 문제를 확인할 수 있어요.</li>
-    <li>문제 세트 편집기에서 <b>카드 끌어다 순서 바꾸기</b>, <b>👁️ 미리보기</b>, <b>🖼️ 그림 URL</b>, <b>🖨️ 학습지/오답 노트 인쇄</b>를 지원해요.</li>
-    <li>키보드 단축키: 객관식 <code>1~4</code> · 주관식 <code>Space</code>(정답 보기)/<code>O</code>/<code>X</code> · 타이머 일시정지 <code>P</code> · +10초 <code>+</code> · 되돌리기 <code>Z</code> · 전체화면 <code>F</code></li></ul>
+    <ul><li><b>🔗 코드·QR 공유</b>로 6자리 공유 코드·QR을 만들고, <b>📊 학급 복습 현황</b>에서 결과 조회 및 <b>CSV 다운로드</b>가 가능해요.</li>
+    <li>편집기에서 <b>그림 파일 올리기·Ctrl+V 캡처 붙여넣기</b>, <b>일괄 섞기·삭제</b>, <b>학생용/교사용/종이 빙고판 인쇄</b>를 지원해요.</li>
+    <li>단축키: 객관식 <code>1~4</code> · 주관식 <code>Space</code>/<code>O</code>/<code>X</code> · 일시정지 <code>P</code> · +10초 <code>+</code> · 되돌리기 <code>Z</code> · 전체화면 <code>F</code></li></ul>
     <div class="m-actions"><button class="pbtn gold" id="m-close">닫기</button></div></div>`;
 }
 function openHowto() {
@@ -3065,6 +3796,7 @@ function toggleFullscreen() {
 document.addEventListener('fullscreenchange', () => { if (S) renderTop(); });
 $('#g-fs').onclick = toggleFullscreen;
 $('#g-settings').onclick = openQuickSettings;
+$('#g-live').onclick = openHostLiveModal;
 $('#g-more').onclick = e => {
   e.stopPropagation();
   const m = $('#more-menu');
@@ -3077,7 +3809,8 @@ $('#more-menu').addEventListener('click', e => {
   if (!b) return;
   const act = b.dataset.more;
   closeMoreMenu();
-  if (act === 'settings') openQuickSettings();
+  if (act === 'live') openHostLiveModal();
+  else if (act === 'settings') openQuickSettings();
   else if (act === 'bgm') $('#g-bgm').click();
   else if (act === 'sfx') $('#g-sfx').click();
   else if (act === 'vol') $('#g-vol').click();
@@ -3148,7 +3881,7 @@ document.addEventListener('keydown', e => {
       return;
     }
     if (modalType === 'teampick' && !aiTurn) {
-      if (/^[1-3]$/.test(e.key)) { const btns = $$('.team-pick [data-t]'); if (btns[+e.key - 1]) { e.preventDefault(); btns[+e.key - 1].click(); } }
+      if (/^[1-5]$/.test(e.key)) { const btns = $$('.team-pick [data-t]'); if (btns[+e.key - 1]) { e.preventDefault(); btns[+e.key - 1].click(); } }
       return;
     }
     if (modalType === 'dice' || modalType === 'mission') {
@@ -3204,11 +3937,14 @@ function refreshTitle() {
   }
 }
 
-$('#title-blocks').innerHTML = '<div class="tile closed"></div>' + TEAM_PRESETS.map((t, k) => `<div class="tile owned pat${k}" style="--f:${t.color};--s:${t.dark}"><span class="temo">${t.emoji}</span></div>`).join('');
+$('#title-blocks').innerHTML = '<div class="tile closed"></div>' + TEAM_PRESETS.slice(0, 4).map((t, k) => `<div class="tile owned pat${k}" style="--f:${t.color};--s:${t.dark}"><span class="temo">${t.emoji}</span></div>`).join('');
 $('#btn-new').onclick = () => { sfx('click'); ac(); setup.settings.playMode = 'team'; saveSetup(); setAdvOpen(false); renderSetup(); show('setup'); };
 $('#btn-solo').onclick = () => { sfx('click'); ac(); setup.settings.playMode = 'solo'; saveSetup(); setAdvOpen(false); renderSetup(); show('setup'); };
 $('#btn-continue').onclick = () => { sfx('click'); resumeGame(); };
 $('#btn-code-join').onclick = $('#btn-code-join2').onclick = () => { sfx('click'); openCodeJoinModal(); };
+$('#btn-live-join').onclick = () => { sfx('click'); openLiveJoinModal(); };
+$('#btn-library').onclick = $('#btn-library2').onclick = () => { sfx('click'); openPublicLibraryModal(); };
+$('#btn-hof').onclick = $('#r-hof-view').onclick = () => { sfx('click'); openHallOfFameModal(); };
 $('#btn-editor').onclick = () => { sfx('click'); openEditor('title'); };
 $('#btn-editor2').onclick = () => { sfx('click'); openEditor('setup'); };
 $('#btn-howto').onclick = $('#btn-howto2').onclick = () => { sfx('click'); openHowto(); };
@@ -3271,6 +4007,7 @@ $('#g-home').onclick = async () => {
     aiFocusTile = -1;
     if (annFinish) annFinish();
     closeModal();
+    closeHostLiveRoom();
     show('title');
   }
 };
@@ -3307,6 +4044,29 @@ $('#r-again').onclick = () => {
   else startGame();
 };
 $('#r-review').onclick = openReviewModal;
+$('#r-hof-save').onclick = () => {
+  if (!S || S.hofSaved) return;
+  const { scores, order } = computeStanding(S);
+  const wIdx = order[0];
+  const rIdx = order[1];
+  const winTeam = S.teams[wIdx];
+  const runTeam = rIdx != null ? S.teams[rIdx] : null;
+  addHallOfFameEntry({
+    setName: S.setName,
+    playMode: S.settings.playMode,
+    boardSize: boardN(S),
+    winnerName: winTeam.name,
+    winnerEmoji: winTeam.emoji,
+    winnerScore: scores[wIdx],
+    runnerUp: runTeam ? `2위 ${runTeam.name} (${scores[rIdx]}점)` : ''
+  });
+  S.hofSaved = true;
+  save();
+  $('#r-hof-save').disabled = true;
+  $('#r-hof-save').textContent = '✅ 명예의 전당 기록됨';
+  sfx('coin');
+  toast('🏆 명예의 전당에 기록했어요!');
+};
 $('#r-board').onclick = () => { show('game'); render(); };
 window.addEventListener('resize', () => { if (S && $('#screen-game').classList.contains('active')) { renderTop(); renderBingoLines(); } });
 
@@ -3344,6 +4104,17 @@ function drawBg(theme = 'forest') {
 
 async function checkSharedLaunch() {
   const params = new URLSearchParams(location.search || '');
+  const roomParam = normalizeRoomCode(params.get('room') || '');
+  if (roomParam) {
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch {}
+    openLiveJoinModal();
+    setTimeout(() => {
+      const inp = $('#lj-code');
+      if (inp) inp.value = roomParam;
+    }, 30);
+    return;
+  }
+
   const codeParam = normalizeCode(params.get('code') || '');
   if (codeParam) {
     try { history.replaceState(null, '', location.pathname + location.hash); } catch {}

@@ -125,6 +125,44 @@ export async function fetchClassAnalytics(rawCode) {
     winRate: Math.round((winSum * 100) / totalPlays),
     avgAccuracy: attemptSum ? Math.round((correctSum * 100) / attemptSum) : 0,
     topMissed,
-    recent: rows.slice(0, 10)
+    recent: rows.slice(0, 10),
+    allRows: rows
   };
+}
+
+export async function fetchPublicLibrary({ subject = 'all', query = '' } = {}) {
+  try {
+    let path = 'bingo_public_library?select=id,title,subject,grade,author_alias,content,question_count,created_at&order=created_at.desc&limit=60';
+    if (subject && subject !== 'all') path += `&subject=eq.${encodeURIComponent(subject)}`;
+    const res = await sbFetch(path);
+    if (!res.ok) return { items: [], cloudAvailable: false };
+    let rows = await res.json();
+    if (!Array.isArray(rows)) rows = [];
+    const q = String(query || '').trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(r => `${r.title} ${r.subject} ${r.grade} ${r.author_alias}`.toLowerCase().includes(q));
+    }
+    return { items: rows, cloudAvailable: true };
+  } catch {
+    return { items: [], cloudAvailable: false };
+  }
+}
+
+export async function publishToPublicLibrary({ title, subject = '기타', grade = '전학년', authorAlias = '익명 선생님', content, questionCount }) {
+  const payload = {
+    title: String(title || '').trim().slice(0, 60) || '공유 문제 세트',
+    subject: String(subject || '기타').trim().slice(0, 20) || '기타',
+    grade: String(grade || '전학년').trim().slice(0, 20) || '전학년',
+    author_alias: String(authorAlias || '익명 선생님').trim().slice(0, 24) || '익명 선생님',
+    content: String(content || '').trim().slice(0, 40000),
+    question_count: Math.max(1, Math.min(200, Number(questionCount) || 1))
+  };
+  const res = await sbFetch('bingo_public_library', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(`Publish failed (${res.status})`);
+  const rows = await res.json();
+  return Array.isArray(rows) && rows[0] ? rows[0] : payload;
 }

@@ -1,5 +1,5 @@
-// 엽쌤 앱 기본 점검: 첫 화면·설정·편집기(텍스트/카드)·게임 진입이 열리는지,
-// 화면 오류가 없는지, 📲 설치·📱 QR 버튼이 있는지, 휴대폰(390px)에서 옆으로 넘치지 않는지 확인한다.
+// 엽쌤 앱 기본 점검: 첫 화면(창고·실시간·명예의전당)·편집기(텍스트/카드/인쇄)·설정(6팀·보상커스텀)·게임(모바일 1화면/1인 가드/TTS/실시간방)이
+// 정상 작동하는지, 화면 오류가 없는지, 📲 설치·📱 QR 버튼이 있는지, 휴대폰(390px)에서 옆으로 넘치지 않는지 확인한다.
 // 사용: SMOKE_URL=http://localhost:8080/<저장소>/ node tests/smoke.mjs
 import { chromium } from 'playwright';
 
@@ -25,14 +25,41 @@ for (const width of [390, 1280]) {
     qr: !!document.querySelector('[data-qr],[data-qr-btn],#qrApp,.qr-button')
       || [...document.querySelectorAll('button,a')].some(b => /\bQR\b/i.test(b.textContent)),
     codeBtn: !!document.getElementById('btn-code-join'),
+    liveBtn: !!document.getElementById('btn-live-join'),
+    libBtn: !!document.getElementById('btn-library'),
+    hofBtn: !!document.getElementById('btn-hof'),
     overflow: document.documentElement.scrollWidth - innerWidth,
   }));
   if (!check.title) problems.push(`${width}px: 제목(<title>)이 비어 있음`);
   if (!check.install || !check.qr) problems.push(`${width}px: 📲 설치·📱 QR 버튼이 없음`);
-  if (!check.codeBtn) problems.push(`${width}px: 공유 코드 열기 버튼(#btn-code-join)이 없음`);
+  if (!check.codeBtn || !check.liveBtn || !check.libBtn || !check.hofBtn) {
+    problems.push(`${width}px: 첫 화면 핵심 버튼(코드/실시간/창고/명예의전당) 누락`);
+  }
   if (width === 390 && check.overflow > 1) problems.push(`390px: 첫 화면이 옆으로 ${check.overflow}px 넘침`);
 
-  // 문제 세트 편집기 진입 점검 (텍스트 + 카드 탭)
+  // 공개 문제 창고 · 명예의 전당 · 실시간 방 모달 점검
+  await page.click('#btn-library');
+  await page.waitForTimeout(350);
+  const libOk = await page.evaluate(() => document.querySelectorAll('#lib-grid .lib-card').length >= 1);
+  if (!libOk) problems.push(`${width}px: 공개 문제 창고 카드가 표시되지 않음`);
+  await page.click('#m-close');
+  await page.waitForTimeout(120);
+
+  await page.click('#btn-hof');
+  await page.waitForTimeout(150);
+  const hofOk = await page.evaluate(() => !!document.getElementById('modal')?.classList.contains('show'));
+  if (!hofOk) problems.push(`${width}px: 명예의 전당 모달이 열리지 않음`);
+  await page.click('#m-close');
+  await page.waitForTimeout(120);
+
+  await page.click('#btn-live-join');
+  await page.waitForTimeout(150);
+  const ljOk = await page.evaluate(() => !!document.getElementById('lj-code'));
+  if (!ljOk) problems.push(`${width}px: 실시간 방 참여 모달이 열리지 않음`);
+  await page.click('#m-close');
+  await page.waitForTimeout(120);
+
+  // 문제 세트 편집기 진입 점검 (텍스트 + 카드 + 인쇄 옵션)
   await page.click('#btn-editor');
   await page.waitForTimeout(200);
   const edCheck = await page.evaluate(() => ({
@@ -47,15 +74,16 @@ for (const width of [390, 1280]) {
   await page.waitForTimeout(150);
   const cardCheck = await page.evaluate(() => ({
     visible: !document.getElementById('ed-cards-wrap')?.classList.contains('hidden'),
+    hasBatch: !!document.getElementById('ed-batch-bar'),
     overflow: document.documentElement.scrollWidth - innerWidth,
   }));
-  if (!cardCheck.visible) problems.push(`${width}px: 카드별 편집 모드가 열리지 않음`);
+  if (!cardCheck.visible || !cardCheck.hasBatch) problems.push(`${width}px: 카드별 편집 모드가 열리지 않음`);
   if (width === 390 && cardCheck.overflow > 1) problems.push(`390px: 문제 세트 편집기(카드)가 옆으로 ${cardCheck.overflow}px 넘침`);
 
   await page.click('#ed-back');
   await page.waitForTimeout(150);
 
-  // 설정 화면 진입 점검 (검색, 세부 설정, 3×3 옵션)
+  // 설정 화면 진입 점검 (검색, 6팀, 3×3 옵션, 보상 세부 선택)
   await page.click('#btn-solo');
   await page.waitForTimeout(200);
   await page.click('#btn-adv');
@@ -64,13 +92,21 @@ for (const width of [390, 1280]) {
     active: document.getElementById('screen-setup')?.classList.contains('active'),
     hasSearch: !!document.getElementById('set-search'),
     has3x3: !!document.querySelector('[data-bsize="3"]'),
+    hasTeam6: !!document.querySelector('[data-mode="team6"]'),
     advOpen: !document.getElementById('adv-panel')?.classList.contains('hidden'),
     overflow: document.documentElement.scrollWidth - innerWidth,
   }));
-  if (!setupCheck.active || !setupCheck.hasSearch || !setupCheck.has3x3 || !setupCheck.advOpen) {
-    problems.push(`${width}px: 설정 화면 요소(검색·3×3·세부설정)가 정상 표시되지 않음`);
+  if (!setupCheck.active || !setupCheck.hasSearch || !setupCheck.has3x3 || !setupCheck.hasTeam6 || !setupCheck.advOpen) {
+    problems.push(`${width}px: 설정 화면 요소(검색·6팀·3×3·세부설정)가 정상 표시되지 않음`);
   }
   if (width === 390 && setupCheck.overflow > 1) problems.push(`390px: 설정 화면이 옆으로 ${setupCheck.overflow}px 넘침`);
+
+  await page.click('#btn-rw-custom');
+  await page.waitForTimeout(150);
+  const rwcOk = await page.evaluate(() => document.querySelectorAll('[data-rwc]').length >= 15);
+  if (!rwcOk) problems.push(`${width}px: 보상 카드 세부 선택 모달이 열리지 않음`);
+  await page.click('#m-close');
+  await page.waitForTimeout(120);
 
   // 게임 진입 점검
   await page.click('#btn-start');
@@ -80,9 +116,10 @@ for (const width of [390, 1280]) {
     tiles: document.querySelectorAll('#board .tile').length,
     mobChips: document.querySelectorAll('#mob-scores .ms-chip').length,
     sideVisible: document.getElementById('side-left')?.offsetParent !== null,
+    hasLiveBtn: !!document.getElementById('g-live'),
     overflow: document.documentElement.scrollWidth - innerWidth,
   }));
-  if (!gameCheck.active || gameCheck.tiles !== 25) problems.push(`${width}px: 게임 보드가 정상 표시되지 않음 (${gameCheck.tiles}칸)`);
+  if (!gameCheck.active || gameCheck.tiles !== 25 || !gameCheck.hasLiveBtn) problems.push(`${width}px: 게임 보드가 정상 표시되지 않음 (${gameCheck.tiles}칸)`);
   if (width === 390) {
     if (gameCheck.overflow > 1) problems.push(`390px: 게임 화면이 옆으로 ${gameCheck.overflow}px 넘침`);
     if (gameCheck.mobChips < 2 || gameCheck.sideVisible) problems.push('390px: 모바일 1화면 점수 칩/사이드바 전환이 올바르지 않음');
@@ -142,4 +179,4 @@ if (problems.length) {
   console.error('점검 실패\n- ' + problems.join('\n- '));
   process.exit(1);
 }
-console.log('점검 통과: 첫 화면·편집기(텍스트/카드)·설정·게임(모바일 1화면/1인 가드/TTS)·오류 없음·가로 넘침 없음');
+console.log('점검 통과: 첫 화면(창고·실시간·명예의전당)·편집기(텍스트/카드)·설정(6팀·보상커스텀)·게임(모바일 1화면/1인 가드/TTS)·오류 없음·가로 넘침 없음');

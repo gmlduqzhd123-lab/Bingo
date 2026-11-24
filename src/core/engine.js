@@ -219,3 +219,10 @@ export function computeSetStars(won, correct, wrong) {
   if (won || acc >= 0.7) return 2;
   return 1;
 }
+
+export function isCatchupEligible(S, teamIdx) {
+  if (!S || !S.settings || !S.settings.catchupBoost || !Array.isArray(S.teams) || S.teams.length < 2) return false;
+  const scores = S.teams.map((_, k) => score(S, k));
+  const maxS = Math.max(...scores);
+  return maxS - (scores[teamIdx] || 0) >= 30;
+}

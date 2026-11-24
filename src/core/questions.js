@@ -140,3 +140,38 @@ export function getSpeechSpec(qText) {
   if (asciiLetters / nonSpace > 0.6) return { text: s, lang: 'en-US' };
   return { text: s, lang: 'ko-KR' };
 }
+
+const CHOSUNG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+export function makeChosungHint(answer) {
+  const clean = String(answer || '').replace(/\([^)]*\)/g, '').trim() || String(answer || '').trim();
+  if (!clean) return '';
+  // If purely Hangul + spaces/numbers/punctuation
+  if (/[가-힣]/.test(clean)) {
+    return [...clean].map(ch => {
+      const code = ch.charCodeAt(0);
+      if (code >= 0xac00 && code <= 0xd7a3) return CHOSUNG[Math.floor((code - 0xac00) / 588)];
+      return ch;
+    }).join('');
+  }
+  // English / Latin
+  if (/[A-Za-z]/.test(clean)) {
+    return clean.split(/(\s+)/).map(tok => {
+      if (!/[A-Za-z]/.test(tok) || tok.length <= 2) return tok;
+      return tok[0] + ' ' + '_ '.repeat(Math.min(8, tok.length - 2)) + tok[tok.length - 1];
+    }).join('').trim();
+  }
+  // Numeric / symbols
+  if (clean.length <= 1) return '_';
+  return clean[0] + '_'.repeat(Math.min(6, clean.length - 1));
+}
+
+export function formatRichText(raw) {
+  const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let s = escHtml(raw);
+  s = s.replace(/_{3,}/g, '<span class="q-blank" aria-label="빈칸"></span>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong class="q-em">$1</strong>');
+  s = s.replace(/\^\{([^}]+)\}|\^([0-9a-zA-Z+-]+)/g, (_, g1, g2) => `<sup>${g1 || g2}</sup>`);
+  s = s.replace(/_\{([^}]+)\}|_([0-9]+)/g, (_, g1, g2) => `<sub>${g1 || g2}</sub>`);
+  return s;
+}

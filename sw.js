@@ -1,5 +1,5 @@
 // 빙고 땅따먹기 퀴즈 오프라인 지원 — 같은 주소(github.io)의 다른 엽쌤 앱과 캐시 저장소를 함께 쓰므로 내 접두어 캐시만 지운다
-const CACHE = 'bingo-v8';
+const CACHE = 'bingo-v9';
 const CACHE_PREFIX = 'bingo-v';
 const CORE = [
   './',
@@ -21,6 +21,8 @@ const CORE = [
   './src/utils/audio.js',
   './src/utils/qr.js',
   './src/utils/cloud.js',
+  './src/utils/image.js',
+  './src/utils/realtime.js',
   './src/ui/print.js'
 ];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())));

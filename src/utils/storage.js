@@ -72,6 +72,16 @@ export function recordSetMastery(setId, stars, bestScore) {
   return m[setId];
 }
 
+export function hashSetContent(title, text) {
+  const str = `${String(title || '').trim()}\0${String(text || '').trim()}`;
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
 export function loadMyCloudCodes() {
   const list = load('bq_my_codes', []);
   return Array.isArray(list) ? list : [];
@@ -80,6 +90,42 @@ export function loadMyCloudCodes() {
 export function saveMyCloudCode(entry) {
   if (!entry || !entry.code) return;
   const list = loadMyCloudCodes().filter(x => x.code !== entry.code);
-  list.unshift({ code: entry.code, title: entry.title || '공유 문제 세트', count: entry.count || 0, createdAt: entry.createdAt || new Date().toISOString() });
+  list.unshift({
+    code: entry.code,
+    title: entry.title || '공유 문제 세트',
+    count: entry.count || 0,
+    contentHash: entry.contentHash || '',
+    createdAt: entry.createdAt || new Date().toISOString()
+  });
   store('bq_my_codes', list.slice(0, 30));
+}
+
+export function findReusableCloudCode(title, text) {
+  const h = hashSetContent(title, text);
+  return loadMyCloudCodes().find(x => x.contentHash && x.contentHash === h) || null;
+}
+
+export function loadHallOfFame() {
+  const list = load('bq_hall_of_fame', []);
+  return Array.isArray(list) ? list : [];
+}
+
+export function addHallOfFameEntry(entry) {
+  const list = loadHallOfFame();
+  list.unshift({
+    id: 'hof_' + Date.now().toString(36),
+    date: new Date().toISOString(),
+    setName: String(entry.setName || '퀴즈').slice(0, 40),
+    playMode: entry.playMode || 'team',
+    boardSize: entry.boardSize || 5,
+    winnerName: String(entry.winnerName || '우승팀').slice(0, 24),
+    winnerEmoji: entry.winnerEmoji || '🏆',
+    winnerScore: Number(entry.winnerScore) || 0,
+    runnerUp: String(entry.runnerUp || '').slice(0, 40)
+  });
+  return store('bq_hall_of_fame', list.slice(0, 30));
+}
+
+export function clearHallOfFame() {
+  return store('bq_hall_of_fame', []);
 }

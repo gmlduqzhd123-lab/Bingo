@@ -156,13 +156,14 @@ export function stopSpeak() {
   } catch {}
 }
 
-export function speakText(text, lang = 'ko-KR') {
+export function speakText(text, lang = 'ko-KR', rate = 1) {
   if (!isTtsSupported() || !text) return false;
   try {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(String(text));
     u.lang = lang;
-    u.rate = lang.startsWith('en') ? 0.92 : 1.0;
+    const baseRate = lang.startsWith('en') ? 0.92 : 1.0;
+    u.rate = Math.max(0.6, Math.min(1.4, baseRate * (Number(rate) || 1)));
     window.speechSynthesis.speak(u);
     return true;
   } catch {

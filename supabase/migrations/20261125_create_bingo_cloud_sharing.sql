@@ -63,3 +63,39 @@ CREATE POLICY "bingo_review_results_insert_public"
     AND jsonb_typeof(missed_questions) = 'array'
     AND jsonb_array_length(missed_questions) <= 50
   );
+
+-- Public Question Library
+CREATE TABLE IF NOT EXISTS public.bingo_public_library (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 60),
+  subject text NOT NULL DEFAULT '기타' CHECK (char_length(subject) BETWEEN 1 AND 20),
+  grade text NOT NULL DEFAULT '전학년' CHECK (char_length(grade) BETWEEN 1 AND 20),
+  author_alias text NOT NULL DEFAULT '익명 선생님' CHECK (char_length(author_alias) BETWEEN 1 AND 24),
+  content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 40000),
+  question_count integer NOT NULL CHECK (question_count BETWEEN 1 AND 200),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bingo_public_library_subject_created
+  ON public.bingo_public_library (subject, created_at DESC);
+
+ALTER TABLE public.bingo_public_library ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "bingo_public_library_select_public" ON public.bingo_public_library;
+CREATE POLICY "bingo_public_library_select_public"
+  ON public.bingo_public_library FOR SELECT
+  TO anon, authenticated
+  USING (true);
+
+DROP POLICY IF EXISTS "bingo_public_library_insert_public" ON public.bingo_public_library;
+CREATE POLICY "bingo_public_library_insert_public"
+  ON public.bingo_public_library FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (
+    char_length(title) BETWEEN 1 AND 60
+    AND char_length(subject) BETWEEN 1 AND 20
+    AND char_length(grade) BETWEEN 1 AND 20
+    AND char_length(author_alias) BETWEEN 1 AND 24
+    AND char_length(content) BETWEEN 1 AND 40000
+    AND question_count BETWEEN 1 AND 200
+  );
