@@ -1,0 +1,130 @@
+const SUPABASE_URL = 'https://oaavmecavooowuayjxjn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_w8zpvaF_wge0pAVJy661gA_bSGnFEn9';
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+export function normalizeCode(raw) {
+  const s = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z2-9]{6}$/.test(s) ? s : '';
+}
+
+export function generateShareCode() {
+  const arr = new Uint8Array(6);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(arr);
+  else for (let i = 0; i < 6; i++) arr[i] = (Math.random() * 256) | 0;
+  let code = '';
+  for (let i = 0; i < 6; i++) code += CODE_ALPHABET[arr[i] % CODE_ALPHABET.length];
+  return code;
+}
+
+async function sbFetch(path, options = {}, timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...options,
+      signal: ctrl.signal,
+      headers: {
+        apikey: SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function uploadSharedSet(title, content, questionCount, baseUrl = '') {
+  const cleanTitle = String(title || '공유 문제 세트').trim().slice(0, 60) || '공유 문제 세트';
+  const cleanContent = String(content || '').trim().slice(0, 40000);
+  const count = Math.max(1, Math.min(200, Number(questionCount) || 1));
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const code = generateShareCode();
+    const res = await sbFetch('bingo_shared_sets', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ code, title: cleanTitle, content: cleanContent, question_count: count })
+    });
+    if (res.status === 409) continue;
+    if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+    const originPath = baseUrl || (typeof location !== 'undefined' ? location.href.split('#')[0].split('?')[0] : '');
+    return { code, shareUrl: `${originPath}?code=${code}` };
+  }
+  throw new Error('Could not allocate share code');
+}
+
+export async function fetchSharedSet(rawCode) {
+  const code = normalizeCode(rawCode);
+  if (!code) throw new Error('INVALID_CODE');
+  const res = await sbFetch(`bingo_shared_sets?code=eq.${encodeURIComponent(code)}&select=code,title,content,question_count,created_at&limit=1`);
+  if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+  const rows = await res.json();
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+export async function submitReviewResult({ shareCode, studentAlias, playMode = 'solo', score = 0, correctCount = 0, wrongCount = 0, won = false, missedQuestions = [] }) {
+  const code = normalizeCode(shareCode);
+  if (!code) return { ok: false, reason: 'INVALID_CODE' };
+  const payload = {
+    share_code: code,
+    student_alias: (String(studentAlias || '학생').trim() || '학생').slice(0, 24),
+    play_mode: playMode === 'team' ? 'team' : 'solo',
+    score: Math.max(-10000, Math.min(100000, Math.round(Number(score) || 0))),
+    correct_count: Math.max(0, Math.min(200, Math.round(Number(correctCount) || 0))),
+    wrong_count: Math.max(0, Math.min(200, Math.round(Number(wrongCount) || 0))),
+    won: !!won,
+    missed_questions: Array.isArray(missedQuestions) ? missedQuestions.slice(0, 50).map(q => String(q || '').slice(0, 200)).filter(Boolean) : []
+  };
+  const res = await sbFetch('bingo_review_results', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify(payload)
+  });
+  return { ok: res.ok, status: res.status };
+}
+
+export async function fetchClassAnalytics(rawCode) {
+  const code = normalizeCode(rawCode);
+  if (!code) throw new Error('INVALID_CODE');
+  const res = await sbFetch(`bingo_review_results?share_code=eq.${encodeURIComponent(code)}&select=student_alias,play_mode,score,correct_count,wrong_count,won,missed_questions,created_at&order=created_at.desc&limit=200`);
+  if (!res.ok) throw new Error(`Analytics failed (${res.status})`);
+  const rows = await res.json();
+  const totalPlays = rows.length;
+  if (!totalPlays) {
+    return { code, totalPlays: 0, avgScore: 0, winRate: 0, avgAccuracy: 0, topMissed: [], recent: [] };
+  }
+  let scoreSum = 0;
+  let winSum = 0;
+  let correctSum = 0;
+  let attemptSum = 0;
+  const missedCounts = new Map();
+  rows.forEach(r => {
+    scoreSum += Number(r.score) || 0;
+    if (r.won) winSum++;
+    const c = Number(r.correct_count) || 0;
+    const w = Number(r.wrong_count) || 0;
+    correctSum += c;
+    attemptSum += c + w;
+    if (Array.isArray(r.missed_questions)) {
+      r.missed_questions.forEach(q => {
+        const k = String(q || '').trim();
+        if (k) missedCounts.set(k, (missedCounts.get(k) || 0) + 1);
+      });
+    }
+  });
+  const topMissed = [...missedCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([question, count]) => ({ question, count }));
+  return {
+    code,
+    totalPlays,
+    avgScore: Math.round(scoreSum / totalPlays),
+    winRate: Math.round((winSum * 100) / totalPlays),
+    avgAccuracy: attemptSum ? Math.round((correctSum * 100) / attemptSum) : 0,
+    topMissed,
+    recent: rows.slice(0, 10)
+  };
+}
