@@ -99,3 +99,49 @@ CREATE POLICY "bingo_public_library_insert_public"
     AND char_length(content) BETWEEN 1 AND 40000
     AND question_count BETWEEN 1 AND 200
   );
+
+-- Public Library Extensions (likes, downloads, reports, optional edit PIN hash)
+ALTER TABLE public.bingo_public_library
+  ADD COLUMN IF NOT EXISTS likes_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS downloads_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS report_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS edit_pin_hash text;
+
+CREATE OR REPLACE FUNCTION public.bingo_lib_interact(p_id uuid, p_action text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF p_action = 'like' THEN
+    UPDATE public.bingo_public_library SET likes_count = likes_count + 1 WHERE id = p_id;
+  ELSIF p_action = 'download' THEN
+    UPDATE public.bingo_public_library SET downloads_count = downloads_count + 1 WHERE id = p_id;
+  ELSIF p_action = 'report' THEN
+    UPDATE public.bingo_public_library SET report_count = report_count + 1 WHERE id = p_id;
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.bingo_lib_delete(p_id uuid, p_pin_hash text)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_deleted integer := 0;
+BEGIN
+  IF coalesce(p_pin_hash, '') = '' THEN
+    RETURN false;
+  END IF;
+  DELETE FROM public.bingo_public_library
+  WHERE id = p_id AND edit_pin_hash = p_pin_hash;
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN v_deleted > 0;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.bingo_lib_interact(uuid, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.bingo_lib_delete(uuid, text) TO anon, authenticated;

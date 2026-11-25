@@ -60,9 +60,30 @@ export function bingoCount(S, t) {
 export function score(S, t) {
   let s = S.teams[t].bonus;
   S.tiles.forEach(x => {
-    if (x.owner === t) s += S.settings.tilePts * (x.golden ? 2 : 1);
+    if (x.owner === t) {
+      const basePts = Number(x.pts) > 0 ? Number(x.pts) : S.settings.tilePts;
+      s += basePts * (x.golden ? 2 : 1);
+    }
   });
   return s + bingoCount(S, t) * S.settings.bingoPts;
+}
+
+export function assignJeopardyPoints(tiles, N = 5) {
+  if (!Array.isArray(tiles)) return tiles;
+  const n = Math.max(3, Math.min(5, Number(N) || 5));
+  const midLo = Math.floor(n / 3);
+  const midHi = n - 1 - midLo;
+  return tiles.map((t, i) => {
+    if (t.q && Number(t.q.pts) > 0) {
+      t.pts = Number(t.q.pts);
+      return t;
+    }
+    const r = (i / n) | 0;
+    const c = i % n;
+    const isCenter = n >= 3 && r >= midLo && r <= midHi && c >= midLo && c <= midHi;
+    t.pts = r === n - 1 ? 30 : (isCenter ? 20 : (r === 0 ? 10 : 20));
+    return t;
+  });
 }
 
 export function computeStanding(S) {

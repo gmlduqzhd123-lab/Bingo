@@ -1,5 +1,5 @@
 import { REWARDS, COMMUNITY_STARTER_SETS } from '../data/sets.js';
-import { parseQuestions, serializeQuestions, formatRichText, isSafeImageUrl } from '../core/questions.js';
+import { parseQuestions, serializeQuestions, formatRichText } from '../core/questions.js';
 import {
   savedSets,
   store,
@@ -8,9 +8,25 @@ import {
   clearHallOfFame,
   loadWrongBank,
   removeWrongQuestion,
-  clearWrongBank
+  clearWrongBank,
+  isWeakDue,
+  loadSoloStats,
+  loadLearningLog,
+  computeStudyStreak,
+  computeAchievements,
+  loadLibLiked,
+  toggleLibLiked,
+  loadLibReported,
+  markLibReported
 } from '../utils/storage.js';
-import { normalizeCode, fetchSharedSet, fetchClassAnalytics, fetchPublicLibrary } from '../utils/cloud.js';
+import {
+  normalizeCode,
+  fetchSharedSet,
+  fetchClassAnalytics,
+  fetchPublicLibrary,
+  interactPublicLibrary,
+  deletePublicLibraryItem
+} from '../utils/cloud.js';
 import { sfx, ac } from '../utils/audio.js';
 import { printQuestionSheet } from './print.js';
 import {
@@ -26,7 +42,8 @@ import {
   openModal,
   closeModal,
   confirmModal,
-  isPCBusyTurn
+  isPCBusyTurn,
+  renderImgTag
 } from './shared.js';
 
 export async function openSharedSetPrompt({ name, rawText, count, shareCode = null }) {
@@ -68,9 +85,7 @@ export async function openSharedSetPrompt({ name, rawText, count, shareCode = nu
   $('#sh-solo').onclick = () => {
     skipResume = true;
     const aliasEl = $('#sh-alias');
-    if (aliasEl && aliasEl.value.trim()) {
-      app.setup.solo.name = aliasEl.value.trim().slice(0, 12);
-    }
+    if (aliasEl && aliasEl.value.trim()) app.setup.solo.name = aliasEl.value.trim().slice(0, 12);
     const id = saveShared();
     closeModal();
     app.setup.settings.playMode = 'solo';
@@ -108,13 +123,9 @@ export function openCodeJoinModal() {
   $('#m-close').onclick = closeModal;
   $('#code-join-form').onsubmit = async e => {
     e.preventDefault();
-    const raw = $('#code-join-input').value;
-    const code = normalizeCode(raw);
+    const code = normalizeCode($('#code-join-input').value);
     const msgEl = $('#code-join-msg');
-    if (!code) {
-      msgEl.textContent = '⚠️ 영문·숫자 6자리 코드를 정확히 입력해 주세요.';
-      return;
-    }
+    if (!code) { msgEl.textContent = '⚠️ 영문·숫자 6자리 코드를 정확히 입력해 주세요.'; return; }
     const btn = $('#code-join-submit');
     btn.disabled = true;
     msgEl.textContent = '☁️ 문제 세트를 불러오는 중...';
@@ -136,6 +147,7 @@ export function openCodeJoinModal() {
 
 export async function openPublicLibraryModal() {
   let subjFilter = 'all';
+  let sortBy = 'recent';
   let qText = '';
   let merged = [...COMMUNITY_STARTER_SETS];
   openModal(`
@@ -143,47 +155,112 @@ export async function openPublicLibraryModal() {
     <p class="m-desc">수업에 바로 쓸 수 있는 추천·공유 세트를 골라 보세요.</p>
     <div class="set-picker-bar" style="margin-top:12px">
       <input type="search" class="set-search" id="lib-search" placeholder="🔍 단원·과목·작성자 검색">
-      <div class="set-filter-chips" id="lib-filters"></div>
+      <div class="lib-sort-row">
+        <div class="set-filter-chips" id="lib-filters"></div>
+        <div class="ed-tabs" style="margin:0" id="lib-sorts">
+          <button type="button" class="on" data-lsort="recent">🆕 최신순</button>
+          <button type="button" data-lsort="popular">❤️ 추천순</button>
+          <button type="button" data-lsort="downloads">📥 인기순</button>
+        </div>
+      </div>
     </div>
     <div class="lib-grid" id="lib-grid"></div>
     <div class="m-actions"><button type="button" class="pbtn gold" id="m-close">닫기</button></div>`, 'wide', 'info');
   $('#m-close').onclick = closeModal;
 
-  const subjects = ['all', '상식', '과학', '수학', '사회', '국어', '영어', '기타'];
+  const subjects = ['all', '상식', '과학', '수학', '사회', '국어', '영어', '정보', '안전', '기타'];
   const drawLib = () => {
     const fEl = $('#lib-filters');
     const gEl = $('#lib-grid');
     if (!fEl || !gEl) return;
     fEl.innerHTML = subjects.map(s => `<button type="button" class="set-filter-btn ${subjFilter === s ? 'on' : ''}" data-lsubj="${s}">${s === 'all' ? '전체' : s}</button>`).join('');
+    $$('#lib-sorts [data-lsort]').forEach(b => b.classList.toggle('on', b.dataset.lsort === sortBy));
     const q = qText.trim().toLowerCase();
-    const list = merged.filter(it => {
+    const liked = new Set(loadLibLiked());
+    const reported = new Set(loadLibReported());
+    let list = merged.filter(it => {
+      if (reported.has(it.id)) return false;
       if (subjFilter !== 'all' && it.subject !== subjFilter) return false;
       if (q && !`${it.title} ${it.subject} ${it.grade} ${it.author_alias}`.toLowerCase().includes(q)) return false;
       return true;
     });
-    gEl.innerHTML = list.length ? list.map((it, idx) => `
+    if (sortBy === 'popular') list = [...list].sort((a, b) => (Number(b.likes_count) || 0) - (Number(a.likes_count) || 0));
+    else if (sortBy === 'downloads') list = [...list].sort((a, b) => (Number(b.downloads_count) || 0) - (Number(a.downloads_count) || 0));
+    gEl.innerHTML = list.length ? list.map((it, idx) => {
+      const isCloud = !String(it.id || '').startsWith('lib_');
+      const likeCnt = (Number(it.likes_count) || 0) + (liked.has(it.id) && !isCloud ? 1 : 0);
+      const dlCnt = Number(it.downloads_count) || 0;
+      return `
       <div class="lib-card">
         <div class="lib-card-title">${esc(it.title)}</div>
-        <div class="lib-card-meta">${esc(it.subject)} · ${esc(it.grade)} · ${it.question_count}문제 · ${esc(it.author_alias)}</div>
-        <div style="margin-top:auto;display:flex;gap:6px;flex-wrap:wrap;padding-top:6px">
+        <div class="lib-card-meta">${esc(it.subject)} · ${esc(it.grade)} · ${it.question_count}문제 · ${esc(it.author_alias)}${dlCnt ? ` · 📥 ${dlCnt}` : ''}</div>
+        <div class="lib-card-foot">
           <button type="button" class="pbtn sm gold" data-libpick="${idx}">📥 가져오기</button>
+          <button type="button" class="lib-act-btn ${liked.has(it.id) ? 'on' : ''}" data-liblike="${esc(it.id)}" title="추천">❤️ ${likeCnt}</button>
+          ${isCloud ? `<button type="button" class="lib-act-btn" data-libreport="${esc(it.id)}" title="신고">🚩</button><button type="button" class="lib-act-btn" data-libdel="${esc(it.id)}" title="PIN으로 삭제">🗑️</button>` : ''}
         </div>
-      </div>`).join('') : '<div class="hint" style="grid-column:1/-1;text-align:center;padding:18px">조건에 맞는 세트가 없어요.</div>';
+      </div>`;
+    }).join('') : '<div class="hint" style="grid-column:1/-1;text-align:center;padding:18px">조건에 맞는 세트가 없어요.</div>';
     gEl._list = list;
   };
   $('#lib-search').addEventListener('input', e => { qText = e.target.value; drawLib(); });
+  $('#lib-sorts').addEventListener('click', e => {
+    const b = e.target.closest('[data-lsort]');
+    if (!b) return;
+    sortBy = b.dataset.lsort;
+    drawLib();
+  });
   $('#lib-filters').addEventListener('click', e => {
     const b = e.target.closest('[data-lsubj]');
     if (!b) return;
     subjFilter = b.dataset.lsubj;
     drawLib();
   });
-  $('#lib-grid').addEventListener('click', e => {
+  $('#lib-grid').addEventListener('click', async e => {
+    const likeBtn = e.target.closest('[data-liblike]');
+    if (likeBtn) {
+      const id = likeBtn.dataset.liblike;
+      const res = toggleLibLiked(id);
+      sfx('click');
+      if (res.liked && !id.startsWith('lib_')) {
+        interactPublicLibrary(id, 'like');
+        const it = merged.find(x => x.id === id);
+        if (it) it.likes_count = (Number(it.likes_count) || 0) + 1;
+      }
+      drawLib();
+      return;
+    }
+    const repBtn = e.target.closest('[data-libreport]');
+    if (repBtn) {
+      const id = repBtn.dataset.libreport;
+      if (!(await confirmModal({ title: '이 세트를 신고할까요?', desc: '부적절한 내용이 포함된 경우 내 목록에서 숨기고 신고를 전송합니다.', okText: '신고', danger: true }))) return;
+      markLibReported(id);
+      interactPublicLibrary(id, 'report');
+      toast('🚩 신고를 접수하고 목록에서 숨겼어요');
+      drawLib();
+      return;
+    }
+    const delBtn = e.target.closest('[data-libdel]');
+    if (delBtn) {
+      const id = delBtn.dataset.libdel;
+      const pin = window.prompt('등록 시 설정한 삭제 비밀번호(PIN)를 입력하세요:');
+      if (!pin) return;
+      const ok = await deletePublicLibraryItem(id, pin.trim());
+      if (ok) {
+        merged = merged.filter(x => x.id !== id);
+        drawLib();
+        toast('🗑️ 공개 창고에서 삭제했어요');
+      } else {
+        toast('⚠️ 비밀번호가 다르거나 삭제 권한이 없어요');
+      }
+      return;
+    }
     const b = e.target.closest('[data-libpick]');
     if (!b) return;
     const gEl = $('#lib-grid');
     const item = gEl && gEl._list ? gEl._list[+b.dataset.libpick] : null;
     if (!item) return;
+    if (!String(item.id || '').startsWith('lib_')) interactPublicLibrary(item.id, 'download');
     closeModal();
     openSharedSetPrompt({ name: item.title, rawText: item.content, count: item.question_count });
   });
@@ -326,28 +403,35 @@ export async function openAnalyticsModal(rawCode, title = '') {
 export function openWeakBankModal() {
   let hideAns = false;
   const draw = () => {
-    const list = loadWrongBank();
+    const now = Date.now();
+    const list = loadWrongBank().slice().sort((a, b) => (isWeakDue(b, now) - isWeakDue(a, now)) || ((b.misses || 1) - (a.misses || 1)));
+    const dueCount = list.filter(x => isWeakDue(x, now)).length;
     const box = openModal(`
       <p class="m-title">🔥 누적 약점 오답 보관함 (${list.length})</p>
-      <p class="m-desc">게임에서 틀렸던 문제가 누적돼요. 다시 맞히면 오답 횟수가 줄고 정복됩니다!</p>
+      <p class="m-desc">지금 복습할 문제 <b>${dueCount}개</b> · 맞히면 복습 간격(1일→3일→7일)이 늘어나고 정복돼요!</p>
       <div class="rev-top" style="justify-content:space-between">
-        <span class="hint" style="margin:0">${list.length ? '틀린 횟수가 많은 문제부터 보여요' : '완벽해요!'}</span>
+        <span class="hint" style="margin:0">${list.length ? '복습 시기가 온 문제부터 위에 보여요' : '완벽해요!'}</span>
         ${list.length ? `<button type="button" class="pbtn sm white" id="wb-hide">${hideAns ? '👀 정답 보기' : '🙈 정답 가리기'}</button>` : ''}
       </div>
-      <div class="rev-list" id="wb-list">${list.length ? list.map(it => `
+      <div class="rev-list" id="wb-list">${list.length ? list.map(it => {
+        const due = isWeakDue(it, now);
+        const daysLeft = it.nextReviewAt ? Math.max(1, Math.ceil((Date.parse(it.nextReviewAt) - now) / 86400000)) : 0;
+        const srsTag = due ? '<span class="rev-badge" style="background:#fef3c7;color:#92400e">🔔 지금 복습!</span>' : `<span class="rev-badge ok">⏳ ${daysLeft}일 후 복습</span>`;
+        return `
         <div class="rev-item">
           <div class="rev-meta" style="justify-content:space-between">
-            <span class="rev-badge">✖ ${it.misses || 1}회 틀림</span>
+            <span style="display:flex;gap:6px;flex-wrap:wrap"><span class="rev-badge">✖ ${it.misses || 1}회 틀림</span>${srsTag}</span>
             <button type="button" class="pbtn sm white" data-wbdel="${esc(it.key)}" title="목록에서 빼기">✓ 정복</button>
           </div>
-          ${it.img && isSafeImageUrl(it.img) ? `<img class="q-img" style="max-height:140px" src="${esc(it.img)}" alt="문제 그림" onerror="this.style.display='none'">` : ''}
+          ${renderImgTag(it.img, 'q-img', '문제 그림', 'max-height:140px')}
           <div class="rev-q">${formatRichText(it.q)}</div>
           <div class="rev-a ${hideAns ? 'blur' : ''}">정답: ${formatRichText(it.a)}</div>
           ${it.explain ? `<div class="rev-ex">💡 ${formatRichText(it.explain)}</div>` : ''}
-        </div>`).join('')
+        </div>`;
+      }).join('')
       : '<div class="hint" style="text-align:center;padding:24px">아직 누적된 오답이 없어요! 게임을 플레이하며 틀린 문제가 자동으로 이곳에 모입니다.</div>'}</div>
       <div class="m-actions">
-        ${list.length ? `<button type="button" class="pbtn ok" id="wb-play">🎯 약점 문제로 바로 게임하기</button><button type="button" class="pbtn white" id="wb-print">🖨️ 약점 오답지 인쇄</button><button type="button" class="pbtn bad" id="wb-clear">🗑️ 비우기</button>` : ''}
+        ${list.length ? '<button type="button" class="pbtn ok" id="wb-play">🎯 약점 문제로 바로 게임하기</button><button type="button" class="pbtn white" id="wb-print">🖨️ 약점 오답지 인쇄</button><button type="button" class="pbtn bad" id="wb-clear">🗑️ 비우기</button>' : ''}
         <button type="button" class="pbtn gold" id="m-close">닫기</button>
       </div>`, 'wide', 'info');
 
@@ -363,13 +447,14 @@ export function openWeakBankModal() {
       $('#wb-play').onclick = () => {
         const cur = loadWrongBank();
         if (!cur.length) return;
+        const prioritized = cur.slice().sort((a, b) => (isWeakDue(b) - isWeakDue(a)) || ((b.misses || 1) - (a.misses || 1)));
         closeModal();
         ac();
         const st = app.setup.settings;
-        const sz = cur.length > 16 ? 5 : (cur.length <= 9 ? 3 : 4);
+        const sz = prioritized.length > 16 ? 5 : (prioritized.length <= 9 ? 3 : 4);
         actions.startGame({
           settings: { ...st, boardSize: sz, golden: Math.min(st.golden, 2), roundLimit: 0, bingoGoal: 0 },
-          customQuestions: cur.map(x => ({ q: x.q, a: x.a, opts: x.opts ? [...x.opts] : null, explain: x.explain || '', img: x.img || '' })),
+          customQuestions: prioritized.map(x => ({ q: x.q, a: x.a, opts: x.opts ? [...x.opts] : null, explain: x.explain || '', img: x.img || '' })),
           setId: '__weak_bank__',
           setName: '🔥 내 약점 오답 복습'
         });
@@ -401,23 +486,74 @@ export function openWeakBankModal() {
   draw();
 }
 
+export function openLearningReportModal() {
+  const st = loadSoloStats();
+  const log = loadLearningLog();
+  const streak = computeStudyStreak(log.days);
+  const totalSolved = (log.totalCorrect || 0) + (log.totalWrong || 0);
+  const acc = totalSolved ? Math.round((log.totalCorrect * 100) / totalSolved) : 0;
+  const subjs = Object.entries(log.subjects || {});
+  const badges = computeAchievements(st, log);
+  const unlockedCount = badges.filter(b => b.unlocked).length;
+
+  openModal(`
+    <p class="m-title">📈 나의 학습 리포트 & 배지 도감</p>
+    <p class="m-desc">꾸준히 퀴즈를 풀며 연속 학습일과 도전과제 배지를 모아 보세요!</p>
+    <div class="rep-grid">
+      <div class="dash-stat"><b>🔥 ${streak}일</b><small>연속 학습</small></div>
+      <div class="dash-stat"><b>${log.gamesPlayed}판</b><small>총 완료 게임</small></div>
+      <div class="dash-stat"><b>${totalSolved}문제</b><small>누적 풀이</small></div>
+      <div class="dash-stat"><b>${acc}%</b><small>누적 정답률</small></div>
+    </div>
+    <h4 style="margin:12px 0 6px">📚 과목별 정답률</h4>
+    ${subjs.length ? `<div class="dash-missed">${subjs.map(([name, s]) => {
+      const tot = (s.correct || 0) + (s.wrong || 0);
+      const p = tot ? Math.round((s.correct * 100) / tot) : 0;
+      return `<div class="dash-missed-row"><div style="font-weight:800;font-size:13.5px">${esc(name)} · ${p}% (${s.correct}/${tot}문제 · ${s.games}판)</div><div class="dash-bar-track"><div class="dash-bar-fill" style="width:${Math.max(6, p)}%;background:linear-gradient(90deg,#22c55e,#16a34a)"></div></div></div>`;
+    }).join('')}</div>`
+    : '<div class="hint">게임을 한 판 이상 끝내면 과목별 정답률이 자동으로 기록돼요.</div>'}
+    <h4 style="margin:14px 0 6px">🏅 도전과제 배지 (${unlockedCount} / ${badges.length})</h4>
+    <div class="badge-grid" id="rep-badges">
+      ${badges.map(b => `<div class="ach-card ${b.unlocked ? 'on' : ''}"><div class="ai">${b.icon}</div><b>${esc(b.name)}</b><small>${esc(b.desc)}</small></div>`).join('')}
+    </div>
+    <div class="m-actions"><button type="button" class="pbtn gold" id="m-close">닫기</button></div>`, 'wide', 'info');
+  $('#m-close').onclick = closeModal;
+}
+
+export function openShortcutsModal() {
+  if ($('#screen-game').classList.contains('active') && isPCBusyTurn()) { toast('🤖 PC 차례가 끝난 뒤 열어 주세요'); return; }
+  openModal(`
+    <p class="m-title">⌨️ 키보드 단축키 안내</p>
+    <p class="m-desc">수업 중 키보드로 빠르게 조작할 수 있어요.</p>
+    <table class="kbd-table">
+      <tr><th>상황</th><th>키</th><th>기능</th></tr>
+      <tr><td>게임 보드</td><td><kbd>←</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>→</kbd></td><td>칸 사이 이동 · <kbd>Enter</kbd> 열기</td></tr>
+      <tr><td>객관식 · OX</td><td><kbd>1</kbd>~<kbd>6</kbd> / <kbd>O</kbd>·<kbd>X</kbd></td><td>보기 또는 ⭕/❌ 바로 선택</td></tr>
+      <tr><td>주관식(팀)</td><td><kbd>Space</kbd> / <kbd>O</kbd> / <kbd>X</kbd></td><td>정답 보기 · 맞음 · 틀림</td></tr>
+      <tr><td>타이머</td><td><kbd>P</kbd> / <kbd>+</kbd></td><td>일시정지 · 10초 추가</td></tr>
+      <tr><td>보상 · 다음</td><td><kbd>1</kbd>~<kbd>3</kbd> / <kbd>Enter</kbd></td><td>카드 고르기 · 다음으로</td></tr>
+      <tr><td>게임 화면</td><td><kbd>Z</kbd> / <kbd>F</kbd> / <kbd>?</kbd></td><td>되돌리기 · 전체화면 · 단축키 표</td></tr>
+    </table>
+    <div class="m-actions"><button type="button" class="pbtn gold" id="m-close">닫기</button></div>`, 'narrow', 'info');
+  $('#m-close').onclick = closeModal;
+}
+
 export function howtoHTML() {
   const rw = REWARDS.map(r => `<div class="rw ${r.kind}"><span class="i">${r.icon}</span><div><b>${r.name}</b>${r.strong ? ' <small>(강력)</small>' : ''}<br>${r.id === 'mission' ? '팀이 함께 재미있는 미션을 해요.' : r.desc}</div></div>`).join('');
   return `<div class="howto">
     <h2>❓ 게임 방법</h2>
-    <h4>1. 게임 시작 · 1인 플레이 & 2~6팀 대결 · 실시간 방</h4>
-    <ul><li>처음 화면에서 <b>🤖 1인 플레이 (vs PC)</b>, <b>👥 팀 대결(최대 6팀)</b>, <b>📡 실시간 방 참여</b>, <b>🏛️ 공개 문제 창고</b>, <b>🔥 약점 오답 보관함</b>을 바로 열 수 있어요.</li>
-    <li>팀 대결 중 상단의 <b>📡 실시간 방</b>을 열면 학생들이 스마트폰으로 칸 투표·답안 제출·즉시 정오답 피드백에 참여하고, <b>투표 1위 배지</b>를 눌러 칸을 바로 열 수 있어요.</li></ul>
-    <h4>2. 점수 계산 · 스틸·콤보 · 힌트 · 읽어주기</h4>
-    <ul><li><b>총점 = 칸 점수 × 칸 수 + 빙고 점수 × 빙고 줄 수 + 보너스 점수</b></li>
-    <li><b>⚡ 오답 스틸 찬스</b>를 켜면 팀 대결에서 틀린 문제를 다른 팀이 바로 이어받아 도전할 수 있고, <b>🔥 3연속 콤보 보너스</b>로 3연속 이상 정답마다 +5점을 추가로 얻어요.</li>
-    <li>객관식 <b>💡 50:50 찬스</b>, 주관식 <b>💡 초성·철자 힌트</b>, <b>🔊 읽어주기(자동/속도 조절)</b>와 <b>⚡ 역전 보정</b>을 지원해요.</li></ul>
+    <h4>1. 게임 시작 · 1인·팀 대결 · OX · 듣기 평가 · 실시간 방</h4>
+    <ul><li>기본 세트 10종과 <b>학급 프로파일 저장</b>, <b>🏫 1~6모둠</b> 프리셋으로 수업 준비를 5초 만에 끝낼 수 있어요.</li>
+    <li>정답이 <code>O/X</code>인 문제는 대형 ⭕/❌ 화면이 열리고, <b>🎧 듣기 평가 모드</b>로 영단어 듣기 퀴즈도 진행해요.</li>
+    <li><b>📡 실시간 방</b>에서 학생들이 팀을 고르고 <b>🔔 선착순 버저</b>, 칸 투표, 답안 제출, 👏 응원 리액션에 참여해요.</li></ul>
+    <h4>2. 배점 차등(제퍼디) · 스틸·콤보 · 전자칠판 모드</h4>
+    <ul><li><b>💎 제퍼디 배점 차등</b>을 켜면 칸별 10/20/30점으로 전략이 깊어지고, <b>⚡ 오답 스틸</b>·<b>🔥 3연속 +5점</b>으로 역전의 재미가 커져요.</li>
+    <li><b>🖥️ 전자칠판 대형 모드</b>와 경기 후 <b>🖼️ 결과 카드(.png) 저장</b>, <b>📈 학습 리포트(연속 학습일·배지 도감)</b>를 지원해요.</li></ul>
     <h4>3. 보상 카드 (정답을 맞히면 1·2·3 카드 중 고르기)</h4>
     <div class="rw-grid">${rw}</div>
-    <h4>4. 선생님용 편의 기능 · 공유 코드 · 인쇄 · 단축키</h4>
-    <ul><li><b>🔗 코드·QR 공유</b>로 6자리 공유 코드·QR을 만들고, <b>📊 학급 복습 현황</b>에서 결과 조회 및 <b>CSV 다운로드</b>가 가능해요.</li>
-    <li>편집기에서 <b>🧹 형식 자동 정리</b>, <b>그림 파일·Ctrl+V 붙여넣기</b>, <b>유형 일괄 변환·섞기·삭제</b>, <b>학생용/교사용/종이 빙고판 인쇄</b>를 지원해요.</li>
-    <li>단축키: 객관식 <code>1~4</code> · 주관식 <code>Space</code>/<code>O</code>/<code>X</code> · 일시정지 <code>P</code> · +10초 <code>+</code> · 되돌리기 <code>Z</code> · 전체화면 <code>F</code></li></ul>
+    <h4>4. 선생님용 편의 기능 · 공유 코드 · 인쇄</h4>
+    <ul><li>편집기에서 <b>📊 엑셀 양식(.csv)</b>, <b>🧹 형식 정리</b>, <b>IndexedDB 고화질 그림 첨부</b>, <b>3종 학습지·빙고판 인쇄</b>를 쓸 수 있어요.</li>
+    <li>단축키 표는 언제든 <kbd>?</kbd> 키를 눌러 확인할 수 있어요.</li></ul>
     <div class="m-actions"><button class="pbtn gold" id="m-close">닫기</button></div></div>`;
 }
 
@@ -435,5 +571,7 @@ export function initModals() {
   actions.openAnalyticsLookupModal = openAnalyticsLookupModal;
   actions.openAnalyticsModal = openAnalyticsModal;
   actions.openWeakBankModal = openWeakBankModal;
+  actions.openLearningReportModal = openLearningReportModal;
+  actions.openShortcutsModal = openShortcutsModal;
   actions.openHowto = openHowto;
 }

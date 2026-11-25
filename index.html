@@ -49,7 +49,11 @@
     </div>
     <div class="title-sub-row">
       <button class="pbtn white" id="btn-hof">🏆 명예의 전당</button>
+      <button class="pbtn white" id="btn-report">📈 학습 리포트</button>
+    </div>
+    <div class="title-sub-row">
       <button class="pbtn white" id="btn-howto">❓ 게임 방법</button>
+      <button class="pbtn white" id="btn-keys">⌨️ 단축키</button>
     </div>
   </div>
   <p class="ys-credit">© 2026 엽쌤. All rights reserved. · <a href="https://gmlduqzhd123-lab.github.io/YScode/">엽쌤의 다른 앱 보기 →</a></p>
@@ -76,6 +80,11 @@
         <div id="solo-stats-bar" class="solo-stats-bar"></div>
       </div>
       <div id="team-box">
+        <div class="cls-prof-bar">
+          <select id="cls-prof-select" aria-label="저장된 학급 프로파일"><option value="">🏫 저장된 학급 불러오기…</option></select>
+          <button type="button" class="pbtn sm white" id="cls-prof-save">💾 반 저장</button>
+          <button type="button" class="pbtn sm bad hidden" id="cls-prof-del" title="선택한 학급 프로파일 삭제">🗑️</button>
+        </div>
         <div class="team-preset-bar">
           <button type="button" class="pbtn sm white" id="tp-group">🏫 1~6모둠</button>
           <button type="button" class="pbtn sm white" id="tp-animal">🐾 동물팀</button>
@@ -129,6 +138,7 @@
           <div class="opt-row"><label>읽기 속도<small>저학년·영어 듣기 수업에 맞춰 조절</small></label><select data-opt="ttsRate"><option value="0.8">🐢 천천히</option><option value="1">보통</option><option value="1.15">🐇 빠르게</option></select></div>
           <div class="opt-row"><label for="o-reach">빙고 직전 힌트<small>1칸만 남으면 빙고 되는 칸을 🔥로 표시</small></label><input type="checkbox" id="o-reach" data-opt="reachHint"></div>
           <div class="opt-row"><label for="o-combo">🔥 3연속 콤보 보너스<small>3문제 이상 연속 정답 시 매번 +5점 추가</small></label><input type="checkbox" id="o-combo" data-opt="comboBonus"></div>
+          <div class="opt-row"><label for="o-bigscreen">🖥️ 전자칠판 대형 모드<small>교실 TV·프로젝터용 큰 글자·고대비 보기</small></label><input type="checkbox" id="o-bigscreen" data-opt="bigScreen"></div>
           <div class="opt-row"><label for="o-motion">애니메이션 줄이기<small>반짝임·흔들림 효과를 끄고 차분하게 진행</small></label><input type="checkbox" id="o-motion" data-opt="reduceMotion"></div>
         </div>
         <div class="panel">
@@ -138,6 +148,9 @@
           <div class="opt-row"><label>목표 빙고 (먼저 승리)<small>지정한 줄 수를 먼저 완성하면 바로 게임 종료</small></label><select data-opt="bingoGoal"><option value="0">없음 (끝까지 대결)</option><option value="1">1줄 먼저 달성</option><option value="2">2줄 먼저 달성</option><option value="3">3줄 먼저 달성</option></select></div>
           <div class="opt-row"><label>틀렸을 때<small>틀린 칸을 어떻게 할까요?</small></label><select data-opt="wrongMode"><option value="keep">칸 그대로 (다른 팀이 다시 도전)</option><option value="reveal">정답 공개 후 빈 땅이 됨</option></select></div>
           <div class="opt-row"><label for="o-steal">⚡ 오답 스틸 찬스<small>팀 대결에서 틀리면 다른 팀이 바로 도전 (칸 유지 모드)</small></label><input type="checkbox" id="o-steal" data-opt="stealOnWrong"></div>
+          <div class="opt-row"><label for="o-listen">🎧 듣기 평가 모드<small>문제 글을 숨기고 🔊 음성 재생 중심으로 출제</small></label><input type="checkbox" id="o-listen" data-opt="listeningMode"></div>
+          <div class="opt-row"><label for="o-jeopardy">💎 배점 차등 (제퍼디)<small>위치·난이도별 10/20/30점 차등 배점</small></label><input type="checkbox" id="o-jeopardy" data-opt="jeopardyPts"></div>
+          <div class="opt-row"><label for="o-pool">♻️ 안 푼 문제 우선 출제<small>문제가 많을 때 이전 판에 안 나온 문제부터 출제</small></label><input type="checkbox" id="o-pool" data-opt="poolNoRepeat"></div>
           <div class="opt-row"><label for="o-autonext">정답 후 자동 넘김<small>끄면 ‘다음으로’ 버튼을 눌러 설명 후 넘어가요</small></label><input type="checkbox" id="o-autonext" data-opt="autoNext"></div>
           <div class="opt-row"><label for="o-hint50">💡 힌트 찬스 허용<small>객관식 50:50 · 주관식 초성 힌트 (게임당 1회)</small></label><input type="checkbox" id="o-hint50" data-opt="hint5050"></div>
           <div class="opt-row"><label for="o-catchup">⚡ 역전 보정<small>1위와 30점 이상 차이 나면 좋은 보상 확률 증가</small></label><input type="checkbox" id="o-catchup" data-opt="catchupBoost"></div>
@@ -180,6 +193,15 @@
         <textarea class="ed-field" id="ed-text" style="margin-top:8px" placeholder="여기에 문제를 붙여 넣으세요.&#10;&#10;식물이 햇빛을 받아 스스로 양분을 만드는 과정은? | 광합성 | 증산 작용 | 호흡 | 소화 | 해설: 빛 에너지를 이용해 양분을 만들어요.&#10;우리 몸에서 피를 온몸으로 보내는 기관은? | 심장"></textarea>
       </div>
       <div id="ed-cards-wrap" class="hidden">
+        <div class="ed-card-filter-row">
+          <input type="search" class="set-search" id="ed-card-search" placeholder="🔍 카드 문제·정답 검색">
+          <select id="ed-card-type-filter" aria-label="카드 유형 필터">
+            <option value="all">전체 보기</option>
+            <option value="mc">객관식만</option>
+            <option value="sa">주관식만</option>
+            <option value="inc">미완성만</option>
+          </select>
+        </div>
         <div class="ed-batch-bar" id="ed-batch-bar">
           <button type="button" class="pbtn sm white" id="ed-sel-all">☑️ 전체 선택</button>
           <button type="button" class="pbtn sm white" id="ed-shuffle-cards">🔀 순서 섞기</button>
@@ -202,6 +224,7 @@
         <button class="pbtn white" id="ed-sample">📋 예시 문제 넣기</button>
         <button class="pbtn white" id="ed-export">⬇️ 파일로 내보내기(.txt)</button>
         <button class="pbtn white" id="ed-import">⬆️ 파일 불러오기</button>
+        <button class="pbtn white" id="ed-csv-tpl">📊 엑셀 양식(.csv)</button>
         <button class="pbtn white" id="ed-print">🖨️ 학습지 인쇄</button>
         <button class="pbtn blue" id="ed-share">🔗 코드·QR 공유</button>
         <input type="file" id="ed-file" accept=".txt,.csv,text/plain" class="hidden">
@@ -268,6 +291,7 @@
           <button type="button" data-more="vol">🔉 음량</button>
           <button type="button" data-more="log">📜 기록</button>
           <button type="button" data-more="fs">⛶ 전체화면</button>
+          <button type="button" data-more="keys">⌨️ 단축키 안내</button>
           <button type="button" data-more="help">❓ 게임 방법</button>
         </div>
       </div>
@@ -275,6 +299,7 @@
       <div class="round" id="round"></div>
     </div>
   </div>
+  <div id="live-react-feed" class="live-react-feed" aria-hidden="true"></div>
   <div class="arena" id="arena">
     <aside class="side left" id="side-left"></aside>
     <main class="board-wrap">
@@ -299,6 +324,7 @@
   <div class="start-row">
     <button class="pbtn gold big" id="r-again">🔁 같은 설정으로 다시</button>
     <button class="pbtn blue big" id="r-review">📝 오답 복습</button>
+    <button class="pbtn ok big" id="r-export-png">🖼️ 결과 카드 저장(.png)</button>
     <button class="pbtn white big" id="r-hof-save">🏆 명예의 전당 기록</button>
     <button class="pbtn white big" id="r-hof-view">📜 명예의 전당</button>
     <button class="pbtn white big" id="r-board">🗺️ 빙고판 보기</button>
@@ -315,7 +341,15 @@
       <span class="live-status" id="ls-status">연결 대기</span>
     </div>
     <div class="solo-stats-bar" id="ls-meta">방 상태를 기다리는 중...</div>
+    <div id="ls-team-bar" class="ls-team-bar hidden"></div>
     <div id="ls-stage"></div>
+    <div id="ls-react-bar" class="ls-react-bar">
+      <span>응원:</span>
+      <button type="button" class="pbtn sm white" data-react="👏">👏</button>
+      <button type="button" class="pbtn sm white" data-react="🔥">🔥</button>
+      <button type="button" class="pbtn sm white" data-react="😮">😮</button>
+      <button type="button" class="pbtn sm white" data-react="🎉">🎉</button>
+    </div>
   </div>
 </section>
 

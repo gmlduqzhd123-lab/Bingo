@@ -9,7 +9,10 @@ import {
   loadSoloStats,
   saveSoloStats,
   loadSetMastery,
-  loadWrongBank
+  loadWrongBank,
+  loadClassProfiles,
+  saveClassProfile,
+  deleteClassProfile
 } from '../utils/storage.js';
 import { sfx, setBgmStyle } from '../utils/audio.js';
 import {
@@ -21,6 +24,7 @@ import {
   saveSetup,
   applyTheme,
   applyMotion,
+  applyBigScreen,
   toast,
   soloStatsHTML,
   openModal,
@@ -31,6 +35,7 @@ import {
 let setFilter = 'all';
 let setQuery = '';
 let emoTargetIdx = null;
+let selectedProfileId = '';
 
 function isPresetMatch(p) {
   return Object.entries(p.vals).every(([k, v]) => app.setup.settings[k] === v);
@@ -38,6 +43,17 @@ function isPresetMatch(p) {
 
 function renderPresets() {
   $('#preset-bar').innerHTML = MODE_PRESETS.map(p => `<button type="button" class="preset-btn ${isPresetMatch(p) ? 'on' : ''}" data-preset="${p.id}"><b>${p.label}</b><small>${p.desc}</small></button>`).join('');
+}
+
+function renderClassProfiles() {
+  const sel = $('#cls-prof-select');
+  const del = $('#cls-prof-del');
+  if (!sel) return;
+  const list = loadClassProfiles();
+  if (selectedProfileId && !list.some(p => p.id === selectedProfileId)) selectedProfileId = '';
+  sel.innerHTML = `<option value="">🏫 저장된 학급 불러오기… (${list.length})</option>` +
+    list.map(p => `<option value="${esc(p.id)}" ${p.id === selectedProfileId ? 'selected' : ''}>${esc(p.name)} (${p.teamCount}팀 · ${p.boardSize}×${p.boardSize})</option>`).join('');
+  if (del) del.classList.toggle('hidden', !selectedProfileId);
 }
 
 export function setAdvOpen(open) {
@@ -84,14 +100,11 @@ function renderSetPicker() {
 
   const favs = loadFavorites();
   const mastery = loadSetMastery();
+  const subjects = ['상식', '과학', '수학', '사회', '국어', '영어', '정보', '안전'];
   const filterTabs = [
     { id: 'all', label: '전체' },
     { id: 'fav', label: `⭐ 즐겨찾기${favs.length ? ` (${favs.length})` : ''}` },
-    { id: '상식', label: '상식' },
-    { id: '수학', label: '수학' },
-    { id: '사회', label: '사회' },
-    { id: '국어', label: '국어' },
-    { id: '영어', label: '영어' },
+    ...subjects.map(s => ({ id: s, label: s })),
     { id: 'custom', label: '내 세트' }
   ];
   $('#set-filters').innerHTML = filterTabs.map(f => `<button type="button" class="set-filter-btn ${setFilter === f.id ? 'on' : ''}" data-sfilter="${f.id}">${f.label}</button>`).join('');
@@ -100,7 +113,7 @@ function renderSetPicker() {
   const filtered = sets.filter(s => {
     if (setFilter === 'fav' && !favs.includes(s.id)) return false;
     if (setFilter === 'custom' && s.builtin) return false;
-    if (['상식', '수학', '사회', '국어', '영어'].includes(setFilter) && s.subject !== setFilter) return false;
+    if (subjects.includes(setFilter) && s.subject !== setFilter) return false;
     if (q) {
       const hay = `${s.name} ${s.subject || ''} ${s.grade || ''} ${s.shareCode || ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -131,6 +144,7 @@ export function renderSetup() {
   const st = setup.settings;
   applyTheme(st.theme);
   applyMotion(st.reduceMotion);
+  applyBigScreen(st.bigScreen);
   renderPresets();
   const isSolo = st.playMode === 'solo';
   $('#play-mode').innerHTML = [
@@ -158,8 +172,9 @@ export function renderSetup() {
         <input data-soloname maxlength="8" value="${esc(setup.solo.name)}" placeholder="나">
         <span class="vs-pc-pill">VS 🤖 PC</span>
       </div>`;
-    $('#solo-stats-bar').innerHTML = soloStatsHTML(loadSoloStats(), true);
+    $('#solo-stats-bar').innerHTML = soloStatsHTML(loadSoloStats(), true) + '<button type="button" class="stats-reset-btn" data-open-report>📈 리포트</button>';
   } else {
+    renderClassProfiles();
     $('#team-rows').innerHTML = setup.teams.slice(0, st.teamCount).map((t, k) => `
       <div class="team-row" style="--c:${TEAM_PRESETS[k].color}">
         <span class="dot"></span>
@@ -209,6 +224,43 @@ export function renderSetup() {
   if ($('#o-steal')) $('#o-steal').disabled = isSolo || st.wrongMode !== 'keep';
 }
 
+function openClassProfileSaveModal() {
+  const st = app.setup.settings;
+  openModal(`
+    <p class="m-title">🏫 학급 프로파일 저장</p>
+    <p class="m-desc">현재 팀 수(${st.teamCount}팀), 팀 이름·캐릭터, 판 크기(${st.boardSize}×${st.boardSize})와 규칙을 저장해요.</p>
+    <form id="cls-save-form" class="q-sa-form" style="margin-top:12px">
+      <input id="cls-name-inp" maxlength="20" placeholder="예: 5학년 2반" required>
+      <button type="submit" class="pbtn gold">저장</button>
+    </form>
+    <div class="m-actions"><button type="button" class="pbtn white" id="m-close">닫기</button></div>`, 'narrow', 'info');
+  $('#m-close').onclick = closeModal;
+  $('#cls-save-form').onsubmit = e => {
+    e.preventDefault();
+    const nm = $('#cls-name-inp').value.trim();
+    if (!nm) return;
+    const saved = saveClassProfile({
+      name: nm,
+      teamCount: st.teamCount,
+      boardSize: st.boardSize,
+      teams: app.setup.teams,
+      settings: {
+        tilePts: st.tilePts,
+        bingoPts: st.bingoPts,
+        theme: st.theme,
+        jeopardyPts: st.jeopardyPts,
+        stealOnWrong: st.stealOnWrong,
+        comboBonus: st.comboBonus
+      }
+    });
+    if (saved) selectedProfileId = saved.id;
+    closeModal();
+    renderSetup();
+    sfx('coin');
+    toast(`🏫 “${nm}” 반 설정을 저장했어요!`);
+  };
+}
+
 function openRewardCustomizerModal() {
   const dis = new Set(app.setup.settings.disabledRewards || []);
   openModal(`
@@ -255,6 +307,43 @@ export function initSetup() {
     $('#btn-weak-bank2').onclick = () => { sfx('click'); if (actions.openWeakBankModal) actions.openWeakBankModal(); };
   }
 
+  if ($('#cls-prof-save')) $('#cls-prof-save').onclick = () => { sfx('click'); openClassProfileSaveModal(); };
+  if ($('#cls-prof-select')) {
+    $('#cls-prof-select').addEventListener('change', e => {
+      const id = e.target.value;
+      selectedProfileId = id;
+      const prof = loadClassProfiles().find(p => p.id === id);
+      if (!prof) { renderClassProfiles(); return; }
+      app.setup.settings.teamCount = Math.max(2, Math.min(6, Number(prof.teamCount) || 2));
+      app.setup.settings.boardSize = [3, 4, 5].includes(Number(prof.boardSize)) ? Number(prof.boardSize) : 5;
+      if (Array.isArray(prof.teams)) {
+        prof.teams.forEach((t, k) => {
+          if (app.setup.teams[k]) {
+            app.setup.teams[k].name = t.name || app.setup.teams[k].name;
+            app.setup.teams[k].emoji = t.emoji || app.setup.teams[k].emoji;
+          }
+        });
+      }
+      if (prof.settings) Object.assign(app.setup.settings, prof.settings);
+      saveSetup();
+      renderSetup();
+      sfx('coin');
+      toast(`🏫 “${prof.name}” 학급 설정을 불러왔어요`);
+    });
+  }
+  if ($('#cls-prof-del')) {
+    $('#cls-prof-del').onclick = async () => {
+      if (!selectedProfileId) return;
+      const prof = loadClassProfiles().find(p => p.id === selectedProfileId);
+      if (!prof) return;
+      if (!(await confirmModal({ title: `“${prof.name}” 학급 프로파일을 삭제할까요?`, okText: '삭제', danger: true }))) return;
+      deleteClassProfile(selectedProfileId);
+      selectedProfileId = '';
+      renderClassProfiles();
+      toast('학급 프로파일을 삭제했어요');
+    };
+  }
+
   $('#emo-picker').addEventListener('click', e => {
     const b = e.target.closest('[data-pickemo]');
     if (!b || emoTargetIdx == null) return;
@@ -278,10 +367,7 @@ export function initSetup() {
     if ($('#emo-picker').classList.contains('show') && !e.target.closest('#emo-picker') && !e.target.closest('[data-emo]')) closeEmoPicker();
   });
 
-  $('#set-search').addEventListener('input', e => {
-    setQuery = e.target.value;
-    renderSetPicker();
-  });
+  $('#set-search').addEventListener('input', e => { setQuery = e.target.value; renderSetPicker(); });
   $('#set-filters').addEventListener('click', e => {
     const b = e.target.closest('[data-sfilter]');
     if (!b) return;
@@ -291,13 +377,7 @@ export function initSetup() {
   });
   $('#set-cards').addEventListener('click', e => {
     const pin = e.target.closest('[data-pin]');
-    if (pin) {
-      e.stopPropagation();
-      sfx('click');
-      toggleFavorite(pin.dataset.pin);
-      renderSetPicker();
-      return;
-    }
+    if (pin) { e.stopPropagation(); sfx('click'); toggleFavorite(pin.dataset.pin); renderSetPicker(); return; }
     const card = e.target.closest('[data-pickset]');
     if (!card) return;
     sfx('click');
@@ -308,10 +388,7 @@ export function initSetup() {
   $('#set-cards').addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') {
       const card = e.target.closest('[data-pickset]');
-      if (card && !e.target.closest('[data-pin]')) {
-        e.preventDefault();
-        card.click();
-      }
+      if (card && !e.target.closest('[data-pin]')) { e.preventDefault(); card.click(); }
     }
   });
 
@@ -353,18 +430,14 @@ export function initSetup() {
     saveSetup();
     renderSetup();
   });
-  $('#solo-row').addEventListener('click', e => {
-    const b = e.target.closest('[data-emo]');
-    if (!b) return;
-    sfx('click');
-    openEmoPicker('solo', b);
-  });
-  $('#solo-row').addEventListener('input', e => {
-    if (!e.target.hasAttribute('data-soloname')) return;
-    app.setup.solo.name = e.target.value;
-    saveSetup();
-  });
+  $('#solo-row').addEventListener('click', e => { const b = e.target.closest('[data-emo]'); if (!b) return; sfx('click'); openEmoPicker('solo', b); });
+  $('#solo-row').addEventListener('input', e => { if (!e.target.hasAttribute('data-soloname')) return; app.setup.solo.name = e.target.value; saveSetup(); });
   $('#solo-stats-bar').addEventListener('click', async e => {
+    if (e.target.closest('[data-open-report]')) {
+      sfx('click');
+      if (actions.openLearningReportModal) actions.openLearningReportModal();
+      return;
+    }
     if (!e.target.closest('[data-reset-stats]')) return;
     if (!(await confirmModal({ title: '1인 전적을 초기화할까요?', desc: '승·무·패 기록과 난이도 정복 배지가 모두 지워집니다.', okText: '초기화', danger: true }))) return;
     saveSoloStats({ wins: 0, draws: 0, losses: 0, bestScore: 0, streak: 0, maxStreak: 0, cleared: { easy: false, normal: false, hard: false } });
@@ -375,10 +448,7 @@ export function initSetup() {
 
   $('#tp-group').onclick = () => {
     sfx('click');
-    for (let k = 0; k < TEAM_PRESETS.length; k++) {
-      app.setup.teams[k].name = `${k + 1}모둠`;
-      app.setup.teams[k].emoji = TEAM_PRESETS[k].emoji;
-    }
+    for (let k = 0; k < TEAM_PRESETS.length; k++) { app.setup.teams[k].name = `${k + 1}모둠`; app.setup.teams[k].emoji = TEAM_PRESETS[k].emoji; }
     saveSetup();
     renderSetup();
     toast('🏫 1~6모둠 이름으로 맞췄어요');
@@ -386,10 +456,7 @@ export function initSetup() {
   $('#tp-animal').onclick = () => {
     sfx('click');
     const names = ['여우팀', '고래팀', '개구리팀', '유니콘팀', '호랑이팀', '펭귄팀'];
-    for (let k = 0; k < TEAM_PRESETS.length; k++) {
-      app.setup.teams[k].name = names[k];
-      app.setup.teams[k].emoji = TEAM_PRESETS[k].emoji;
-    }
+    for (let k = 0; k < TEAM_PRESETS.length; k++) { app.setup.teams[k].name = names[k]; app.setup.teams[k].emoji = TEAM_PRESETS[k].emoji; }
     saveSetup();
     renderSetup();
     toast('🐾 동물팀 이름으로 바꿨어요');
@@ -405,23 +472,9 @@ export function initSetup() {
     toast('🎲 팀 순서를 무작위로 섞었어요');
   };
 
-  $('#team-rows').addEventListener('click', e => {
-    const b = e.target.closest('[data-emo]');
-    if (!b) return;
-    sfx('click');
-    openEmoPicker(+b.dataset.emo, b);
-  });
-  $('#team-rows').addEventListener('input', e => {
-    const k = e.target.dataset.tname;
-    if (k == null) return;
-    app.setup.teams[+k].name = e.target.value;
-    saveSetup();
-  });
-  $('#set-select').addEventListener('change', e => {
-    app.setup.settings.setId = e.target.value;
-    saveSetup();
-    renderSetup();
-  });
+  $('#team-rows').addEventListener('click', e => { const b = e.target.closest('[data-emo]'); if (!b) return; sfx('click'); openEmoPicker(+b.dataset.emo, b); });
+  $('#team-rows').addEventListener('input', e => { const k = e.target.dataset.tname; if (k == null) return; app.setup.teams[+k].name = e.target.value; saveSetup(); });
+  $('#set-select').addEventListener('change', e => { app.setup.settings.setId = e.target.value; saveSetup(); renderSetup(); });
   $$('[data-opt]').forEach(el => el.addEventListener('change', () => {
     const k = el.dataset.opt;
     app.setup.settings[k] = el.type === 'checkbox' ? el.checked : (isNaN(+el.value) ? el.value : +el.value);

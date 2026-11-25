@@ -1,9 +1,25 @@
 export function isSafeImageUrl(url) {
   const s = String(url || '').trim();
   if (!s || s.length > 200000) return false;
+  if (/^idb:\/\/[a-zA-Z0-9_-]{4,64}$/.test(s)) return true;
   if (/^https?:\/\/\S+$/i.test(s)) return true;
   if (/^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/i.test(s)) return true;
   return false;
+}
+
+export function normalizeOX(val) {
+  const s = String(val || '').trim().toUpperCase();
+  if (s === 'O' || s === '⭕' || s === '참' || s === 'TRUE') return 'O';
+  if (s === 'X' || s === '❌' || s === '거짓' || s === 'FALSE') return 'X';
+  return '';
+}
+
+export function isOXQuestion(qObj) {
+  if (!qObj) return false;
+  const aOx = normalizeOX(qObj.a);
+  if (!aOx) return false;
+  if (!Array.isArray(qObj.opts) || !qObj.opts.length) return true;
+  return qObj.opts.length === 2 && qObj.opts.every(o => !!normalizeOX(o));
 }
 
 function splitCsvLine(line) {
@@ -53,7 +69,10 @@ export function parseQuestions(text) {
 
     let explain = '';
     let img = '';
-    for (let k = 0; k < 2 && parts.length >= 3; k++) {
+    let listen = '';
+    let pts = 0;
+    let diff = '';
+    for (let k = 0; k < 4 && parts.length >= 3; k++) {
       const tail = parts[parts.length - 1];
       const em = tail.match(/^(?:해설|설명)\s*[:：]\s*(.+)$/);
       if (em && !explain) {
@@ -68,8 +87,29 @@ export function parseQuestions(text) {
         parts.pop();
         continue;
       }
+      const lm = tail.match(/^(?:듣기|음성|listen)\s*(?:[:：]\s*(.*))?$/i);
+      if (lm && !listen) {
+        listen = (lm[1] || '').trim() || 'auto';
+        parts.pop();
+        continue;
+      }
+      const pm = tail.match(/^(?:배점|점수|pts)\s*[:：]\s*(\d+)\s*점?$/i);
+      if (pm && !pts) {
+        const pv = Math.max(5, Math.min(100, Number(pm[1]) || 0));
+        if (pv > 0) pts = pv;
+        parts.pop();
+        continue;
+      }
+      const dm = tail.match(/^(?:난이도|diff)\s*[:：]\s*(하|중|상|쉬움|보통|어려움|easy|mid|hard)$/i);
+      if (dm && !diff) {
+        const rawD = dm[1].toLowerCase();
+        diff = (rawD === '하' || rawD === '쉬움' || rawD === 'easy') ? 'easy' : (rawD === '상' || rawD === '어려움' || rawD === 'hard') ? 'hard' : 'mid';
+        parts.pop();
+        continue;
+      }
       break;
     }
+    if (!pts && diff) pts = diff === 'hard' ? 30 : diff === 'mid' ? 20 : 10;
 
     if (parts.length < 2) {
       errors.push({ line: i + 1, msg: `${i + 1}번째 줄: 정답이 없어요` });
@@ -82,7 +122,7 @@ export function parseQuestions(text) {
       return;
     }
     const opts = wrong.length ? [a, ...wrong.filter(w => w !== a)].slice(0, 6) : null;
-    list.push({ q, a, opts: opts && opts.length > 1 ? opts : null, explain, img });
+    list.push({ q, a, opts: opts && opts.length > 1 ? opts : null, explain, img, listen, pts, diff });
   });
   return { list, errors };
 }
@@ -146,6 +186,10 @@ export function serializeQuestions(list) {
   return list.map(item => {
     const cols = [clean(item.q), clean(item.a)];
     if (item.opts && item.opts.length > 1) cols.push(...item.opts.slice(1).map(clean).filter(Boolean));
+    if (item.listen && String(item.listen).trim()) {
+      cols.push(item.listen === 'auto' ? '듣기' : '듣기: ' + clean(item.listen));
+    }
+    if (Number(item.pts) > 0) cols.push(`배점: ${Math.round(Number(item.pts))}`);
     if (item.explain && item.explain.trim()) cols.push('해설: ' + clean(item.explain));
     if (item.img && isSafeImageUrl(item.img)) cols.push('이미지: ' + item.img.trim());
     return cols.join(' | ');

@@ -13,6 +13,7 @@ import {
   actions,
   applyTheme,
   applyMotion,
+  applyBigScreen,
   show,
   toast,
   trapTab,
@@ -32,9 +33,11 @@ import {
   openPublicLibraryModal,
   openHallOfFameModal,
   openWeakBankModal,
+  openLearningReportModal,
+  openShortcutsModal,
   openHowto
 } from './ui/modals.js';
-import { initGame, startGame, resumeGame, render, renderTop, toggleFullscreen } from './ui/game.js';
+import { initGame, startGame, resumeGame, render, toggleFullscreen } from './ui/game.js';
 
 initSharedUI();
 initSetup();
@@ -73,6 +76,8 @@ $('#btn-code-join').onclick = $('#btn-code-join2').onclick = () => { sfx('click'
 $('#btn-live-join').onclick = () => { sfx('click'); openLiveJoinModal(); };
 $('#btn-library').onclick = $('#btn-library2').onclick = () => { sfx('click'); openPublicLibraryModal(); };
 $('#btn-hof').onclick = $('#r-hof-view').onclick = () => { sfx('click'); openHallOfFameModal(); };
+if ($('#btn-report')) $('#btn-report').onclick = () => { sfx('click'); openLearningReportModal(); };
+if ($('#btn-keys')) $('#btn-keys').onclick = () => { sfx('click'); openShortcutsModal(); };
 $('#btn-editor').onclick = () => { sfx('click'); openEditor('title'); };
 $('#btn-editor2').onclick = () => { sfx('click'); openEditor('setup'); };
 $('#btn-howto').onclick = $('#btn-howto2').onclick = () => { sfx('click'); openHowto(); };
@@ -113,6 +118,12 @@ document.addEventListener('keydown', e => {
   const tag = e.target && e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
 
+  if (e.key === '?' && !$('#modal').classList.contains('show')) {
+    e.preventDefault();
+    openShortcutsModal();
+    return;
+  }
+
   const S = app.S;
   if ($('#modal').classList.contains('show')) {
     const aiTurn = !!(S && S.teams[S.turn] && S.teams[S.turn].isAI);
@@ -128,6 +139,12 @@ document.addEventListener('keydown', e => {
       if (ovOk || ovNo) {
         if ((e.key === 'o' || e.key === 'O') && ovOk) { e.preventDefault(); ovOk.click(); return; }
         if ((e.key === 'x' || e.key === 'X') && ovNo) { e.preventDefault(); ovNo.click(); return; }
+      }
+      const oxO = $('.q-ox-btn[data-ox="O"]');
+      const oxX = $('.q-ox-btn[data-ox="X"]');
+      if (oxO || oxX) {
+        if ((e.key === '1' || e.key === 'o' || e.key === 'O') && oxO && !oxO.disabled) { e.preventDefault(); oxO.click(); return; }
+        if ((e.key === '2' || e.key === 'x' || e.key === 'X') && oxX && !oxX.disabled) { e.preventDefault(); oxX.click(); return; }
       }
       if (/^[1-6]$/.test(e.key)) { const b = $(`.q-opt[data-k="${+e.key - 1}"]`); if (b && !b.disabled) { e.preventDefault(); b.click(); } return; }
       if (e.key === ' ') { const r = $('#q-reveal'); if (r && !r.disabled) { e.preventDefault(); r.click(); } return; }
@@ -192,10 +209,7 @@ async function checkSharedLaunch() {
   if (roomParam) {
     try { history.replaceState(null, '', location.pathname + location.hash); } catch {}
     openLiveJoinModal();
-    setTimeout(() => {
-      const inp = $('#lj-code');
-      if (inp) inp.value = roomParam;
-    }, 30);
+    setTimeout(() => { const inp = $('#lj-code'); if (inp) inp.value = roomParam; }, 30);
     return;
   }
 
@@ -274,6 +288,7 @@ if (AU.bgm) {
 window.addEventListener('hashchange', checkSharedLaunch);
 applyTheme(app.setup.settings.theme);
 applyMotion(app.setup.settings.reduceMotion);
+applyBigScreen(app.setup.settings.bigScreen);
 renderSetup();
 refreshTitle();
 checkSharedLaunch();

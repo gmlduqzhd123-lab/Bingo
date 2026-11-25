@@ -14,9 +14,10 @@ import {
 import { encodeSetShare, makeQRSvg } from '../utils/qr.js';
 import { uploadSharedSet, publishToPublicLibrary } from '../utils/cloud.js';
 import { compressImageFile } from '../utils/image.js';
+import { saveImageToIdb, hydrateImages, getIdbUsage, inlineIdbImagesInText } from '../utils/imageStore.js';
 import { sfx, speakText, isTtsSupported } from '../utils/audio.js';
 import { printQuestionSheet, printBingoBoard } from './print.js';
-import { $, $$, esc, app, actions, saveSetup, show, toast, openModal, closeModal, confirmModal } from './shared.js';
+import { $, $$, esc, app, actions, saveSetup, show, toast, openModal, closeModal, confirmModal, renderImgTag } from './shared.js';
 
 let editingId = null;
 let editorBack = 'title';
@@ -26,19 +27,23 @@ let cardList = [];
 let dragCardIdx = -1;
 let imgUploadIdx = -1;
 let qrZoomLastFocus = null;
+let cardSearchQ = '';
+let cardTypeFilter = 'all';
 
 const currentEdSnap = () => $('#ed-name').value + '\0' + $('#ed-text').value;
 const isEdDirty = () => currentEdSnap() !== edSnapshot;
 function refreshDirty() { $('#ed-dirty').classList.toggle('hidden', !isEdDirty()); }
 
-export function renderStorageGauge() {
+export async function renderStorageGauge() {
   const el = $('#ed-storage-bar');
   if (!el) return;
   const { usedKB, maxKB, pct } = getStorageUsage();
+  const idb = await getIdbUsage();
+  if (!$('#ed-storage-bar')) return;
   el.className = 'ed-storage' + (pct >= 90 ? ' danger' : pct >= 75 ? ' warn' : '');
   el.innerHTML = `
     <div class="ed-storage-head">
-      <span>💾 브라우저 저장 공간: <b>${usedKB}KB</b> / ${maxKB}KB (${pct}%)</span>
+      <span>💾 텍스트 저장: <b>${usedKB}KB</b> / ${maxKB}KB (${pct}%)${idb.count ? ` · 🖼️ 그림 <b>${idb.count}장</b>(${idb.kb}KB, IndexedDB)` : ''}</span>
       ${pct >= 75 ? '<small>백업 후 필요 없는 세트를 정리해 주세요</small>' : ''}
     </div>
     <div class="ed-storage-track"><div class="ed-storage-fill" style="width:${Math.max(2, pct)}%"></div></div>`;
@@ -63,6 +68,8 @@ function loadCardsFromText() {
     extraWrong: x.opts && x.opts.length > 4 ? x.opts.slice(4) : [],
     explain: x.explain || '',
     img: x.img || '',
+    listen: x.listen || '',
+    pts: x.pts || 0,
     selected: false
   }));
 }
@@ -73,7 +80,20 @@ function renderCardEditor() {
     wrap.innerHTML = '<div class="hint" style="padding:12px;text-align:center">아직 문제가 없어요. 아래 <b>➕ 새 문제 추가</b> 버튼을 눌러 보세요.</div>';
     return;
   }
-  wrap.innerHTML = cardList.map((c, idx) => {
+  const q = cardSearchQ.trim().toLowerCase();
+  const visible = cardList.map((c, idx) => ({ c, idx })).filter(({ c }) => {
+    const inc = !(c.q.trim() && c.a.trim());
+    if (cardTypeFilter === 'mc' && !c.isMc) return false;
+    if (cardTypeFilter === 'sa' && c.isMc) return false;
+    if (cardTypeFilter === 'inc' && !inc) return false;
+    if (q && !`${c.q} ${c.a} ${c.explain}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if (!visible.length) {
+    wrap.innerHTML = '<div class="hint" style="padding:12px;text-align:center">검색·필터 조건에 맞는 카드가 없어요.</div>';
+    return;
+  }
+  wrap.innerHTML = visible.map(({ c, idx }) => {
     const inc = !(c.q.trim() && c.a.trim());
     const canAddOpt = c.isMc && (3 + (c.extraWrong || []).length) < 5;
     const validImg = c.img && isSafeImageUrl(c.img);
@@ -90,11 +110,17 @@ function renderCardEditor() {
           <button type="button" class="pbtn sm white" data-cmove="${idx}:-1" ${idx === 0 ? 'disabled' : ''} title="위로 이동">▲</button>
           <button type="button" class="pbtn sm white" data-cmove="${idx}:1" ${idx === cardList.length - 1 ? 'disabled' : ''} title="아래로 이동">▼</button>
           <select data-cf="type"><option value="mc" ${c.isMc ? 'selected' : ''}>객관식</option><option value="sa" ${!c.isMc ? 'selected' : ''}>주관식</option></select>
+          <select data-cf="pts" title="개별 배점">
+            <option value="0" ${!c.pts ? 'selected' : ''}>기본점수</option>
+            <option value="10" ${+c.pts === 10 ? 'selected' : ''}>10점</option>
+            <option value="20" ${+c.pts === 20 ? 'selected' : ''}>20점</option>
+            <option value="30" ${+c.pts === 30 ? 'selected' : ''}>30점</option>
+          </select>
           <button type="button" class="pbtn sm bad" data-cdel="${idx}" title="삭제">🗑️</button>
         </div>
       </div>
       <input data-cf="q" value="${esc(c.q)}" placeholder="문제를 입력하세요 (**강조**, ____ 빈칸, ^2 위첨자)">
-      <input data-cf="a" value="${esc(c.a)}" placeholder="정답을 입력하세요">
+      <input data-cf="a" value="${esc(c.a)}" placeholder="정답을 입력하세요 (O/X 문제는 자동으로 큰 OX UI 적용)">
       ${c.isMc ? `<div class="ed-card-opts">
         <input data-cf="w1" value="${esc(c.w1)}" placeholder="오답 1">
         <input data-cf="w2" value="${esc(c.w2)}" placeholder="오답 2">
@@ -107,13 +133,14 @@ function renderCardEditor() {
         <button type="button" class="pbtn sm white" data-cimgup="${idx}" title="컴퓨터에서 그림 파일 올리기">🖼️</button>
         ${validImg ? `<button type="button" class="pbtn sm bad" data-cimgclr="${idx}" title="그림 지우기">✕</button>` : ''}
       </div>
-      ${validImg ? `<img class="ed-img-thumb" src="${esc(c.img)}" alt="첨부 그림 미리보기" onerror="this.style.display='none'">` : ''}
+      ${validImg ? renderImgTag(c.img, 'ed-img-thumb', '첨부 그림 미리보기') : ''}
       <div class="ed-card-foot">
         <div class="ed-card-warn${inc ? '' : ' hidden'}">⚠️ 문제와 정답을 모두 입력해야 저장돼요</div>
         ${canAddOpt ? `<button type="button" class="pbtn sm white" data-caddopt="${idx}">+ 오답 추가</button>` : ''}
       </div>
     </div>`;
   }).join('');
+  hydrateImages(wrap);
 }
 
 function openCardJumpModal(fromIdx) {
@@ -154,7 +181,9 @@ function syncCardsToText() {
     a: c.a.trim(),
     opts: c.isMc ? [c.a.trim(), c.w1.trim(), c.w2.trim(), c.w3.trim(), ...(c.extraWrong || []).map(x => x.trim())].filter(Boolean) : null,
     explain: c.explain.trim(),
-    img: isSafeImageUrl(c.img) ? c.img.trim() : ''
+    img: isSafeImageUrl(c.img) ? c.img.trim() : '',
+    listen: c.listen || '',
+    pts: Number(c.pts) || 0
   }));
   $('#ed-text').value = serializeQuestions(valid);
   updateEdStatus();
@@ -163,12 +192,12 @@ function syncCardsToText() {
 function openQuestionPreview(item, num) {
   const opts = item.opts ? [...item.opts] : null;
   const spec = getSpeechSpec(item.q);
-  const ttsBtn = isTtsSupported() ? `<button type="button" class="q-tts-btn" id="q-tts" title="문제 읽어주기">🔊 읽기</button>` : '';
-  const imgHtml = item.img && isSafeImageUrl(item.img) ? `<img class="q-img" src="${esc(item.img)}" alt="문제 그림" onerror="this.style.display='none'">` : '';
+  const ttsBtn = isTtsSupported() ? '<button type="button" class="q-tts-btn" id="q-tts" title="문제 읽어주기">🔊 읽기</button>' : '';
+  const imgHtml = renderImgTag(item.img, 'q-img', '문제 그림');
   openModal(`
     <div class="q-head" style="--c:#2f7de1">
       <span>👁️ 문제 미리보기</span>
-      <div class="q-head-r">${ttsBtn}<span class="q-no">#${num}번</span></div>
+      <div class="q-head-r">${ttsBtn}<span class="q-no">#${num}번${item.pts ? ` · ${item.pts}점` : ''}</span></div>
     </div>
     ${imgHtml}
     <div class="q-text${item.q.length > 65 ? ' long' : ''}">${formatRichText(item.q)}</div>
@@ -221,7 +250,7 @@ function updateEdStatus() {
   if (errors.length) h += errors.slice(0, 4).map(e => `<button type="button" class="ed-err" data-line="${e.line}">⚠️ ${esc(e.msg)}</button>`).join('') + (errors.length > 4 ? `<div style="margin-top:4px;font-size:12.5px">…외 ${errors.length - 4}줄</div>` : '');
   st.innerHTML = h;
   st.classList.toggle('warn', !list.length || errors.length > 0);
-  $('#ed-preview').innerHTML = list.map((q, i) => `<div><span class="tag ${q.opts ? '' : 's'}">${q.opts ? '객관식' : '주관식'}</span><b>${i + 1}.</b> ${formatRichText(q.q)} → <b>${formatRichText(q.a)}</b>${q.opts ? ` <span style="color:var(--muted)">(오답: ${q.opts.slice(1).map(esc).join(', ')})</span>` : ''}${q.explain ? ` <span style="color:#2563eb">[해설: ${esc(q.explain)}]</span>` : ''}${q.img ? ` <span style="color:#059669">[🖼️ 그림]</span>` : ''}</div>`).join('');
+  $('#ed-preview').innerHTML = list.map((q, i) => `<div><span class="tag ${q.opts ? '' : 's'}">${q.opts ? '객관식' : '주관식'}</span><b>${i + 1}.</b> ${formatRichText(q.q)} → <b>${formatRichText(q.a)}</b>${q.opts ? ` <span style="color:var(--muted)">(오답: ${q.opts.slice(1).map(esc).join(', ')})</span>` : ''}${q.pts ? ` <span style="color:#d97706">[${q.pts}점]</span>` : ''}${q.listen ? ' <span style="color:#7c3aed">[🎧]</span>' : ''}${q.explain ? ` <span style="color:#2563eb">[해설: ${esc(q.explain)}]</span>` : ''}${q.img ? ' <span style="color:#059669">[🖼️ 그림]</span>' : ''}</div>`).join('');
   $('#ed-preview').classList.toggle('hidden', !list.length);
   refreshDirty();
 }
@@ -327,9 +356,10 @@ function openPublishLibraryModal(name, text, count) {
     <p class="m-desc">다른 선생님들도 검색해서 수업에 쓸 수 있게 공유해요.</p>
     <form id="pub-form" class="tm-grid" style="margin-top:12px">
       <div class="opt-row"><label>제목</label><input id="pub-title" class="ed-field" style="max-width:66%" maxlength="40" value="${esc(name)}"></div>
-      <div class="opt-row"><label>과목</label><select id="pub-subj"><option>상식</option><option>과학</option><option>수학</option><option>사회</option><option>국어</option><option>영어</option><option>기타</option></select></div>
+      <div class="opt-row"><label>과목</label><select id="pub-subj"><option>상식</option><option>과학</option><option>수학</option><option>사회</option><option>국어</option><option>영어</option><option>정보</option><option>안전</option><option>기타</option></select></div>
       <div class="opt-row"><label>추천 학년</label><select id="pub-grade"><option>전학년</option><option>초등</option><option>중등</option><option>고등</option></select></div>
       <div class="opt-row"><label>작성자 이름</label><input id="pub-author" class="ed-field" style="max-width:66%" maxlength="20" value="선생님" placeholder="예: 엽쌤"></div>
+      <div class="opt-row"><label>삭제 비밀번호 (선택)<small>나중에 직접 내릴 때 필요해요</small></label><input id="pub-pin" type="password" class="ed-field" style="max-width:66%" maxlength="12" placeholder="4자리 숫자 등"></div>
       <div class="q-msg" id="pub-msg" style="font-size:14px"></div>
       <div class="m-actions">
         <button type="submit" class="pbtn ok" id="pub-submit">🌐 등록하기 (${count}문제)</button>
@@ -343,13 +373,15 @@ function openPublishLibraryModal(name, text, count) {
     btn.disabled = true;
     $('#pub-msg').textContent = '☁️ 공개 창고에 올리는 중...';
     try {
+      const cleanText = await inlineIdbImagesInText(text);
       await publishToPublicLibrary({
         title: $('#pub-title').value,
         subject: $('#pub-subj').value,
         grade: $('#pub-grade').value,
         authorAlias: $('#pub-author').value,
-        content: text,
-        questionCount: count
+        content: cleanText,
+        questionCount: count,
+        editPin: $('#pub-pin').value.trim()
       });
       closeModal();
       sfx('coin');
@@ -361,7 +393,8 @@ function openPublishLibraryModal(name, text, count) {
   };
 }
 
-async function openShareModal(name, text, count, forceNew = false) {
+async function openShareModal(name, rawText, count, forceNew = false) {
+  const text = await inlineIdbImagesInText(rawText);
   const token = await encodeSetShare(name, text);
   const baseUrl = location.href.split('#')[0].split('?')[0];
   const offlineUrl = baseUrl + '#set=' + token;
@@ -494,6 +527,13 @@ export function initEditor() {
   actions.closeQrZoom = closeQrZoom;
   actions.renderStorageGauge = renderStorageGauge;
 
+  if ($('#ed-card-search')) {
+    $('#ed-card-search').addEventListener('input', e => { cardSearchQ = e.target.value; renderCardEditor(); });
+  }
+  if ($('#ed-card-type-filter')) {
+    $('#ed-card-type-filter').addEventListener('change', e => { cardTypeFilter = e.target.value; renderCardEditor(); });
+  }
+
   $('#ed-cards').addEventListener('dragstart', e => {
     const card = e.target.closest('.ed-card');
     if (!card) return;
@@ -537,10 +577,12 @@ export function initEditor() {
     if (!file) return;
     try {
       const dataUrl = await compressImageFile(file);
-      cardList[+card.dataset.ci].img = dataUrl;
+      const ref = await saveImageToIdb(dataUrl);
+      cardList[+card.dataset.ci].img = ref;
       syncCardsToText();
       renderCardEditor();
-      toast('🖼️ 클립보드 그림을 압축해 넣었어요!');
+      renderStorageGauge();
+      toast('🖼️ 클립보드 그림을 IndexedDB에 압축 저장했어요!');
     } catch {
       toast('⚠️ 그림을 처리하지 못했어요 (파일 크기/형식 확인)');
     }
@@ -552,9 +594,11 @@ export function initEditor() {
     if (!f || imgUploadIdx < 0 || !cardList[imgUploadIdx]) return;
     try {
       const dataUrl = await compressImageFile(f);
-      cardList[imgUploadIdx].img = dataUrl;
+      const ref = await saveImageToIdb(dataUrl);
+      cardList[imgUploadIdx].img = ref;
       syncCardsToText();
       renderCardEditor();
+      renderStorageGauge();
       toast('🖼️ 그림을 첨부했어요!');
     } catch {
       toast('⚠️ 이미지 파일만 올릴 수 있어요');
@@ -574,7 +618,7 @@ export function initEditor() {
       return;
     }
     const f = e.target.dataset.cf;
-    if (!f || f === 'type') return;
+    if (!f || f === 'type' || f === 'pts') return;
     cardList[ci][f] = e.target.value;
     const c = cardList[ci];
     const inc = !(c.q.trim() && c.a.trim());
@@ -593,6 +637,11 @@ export function initEditor() {
       cardList[ci].isMc = e.target.value === 'mc';
       syncCardsToText();
       renderCardEditor();
+      return;
+    }
+    if (e.target.dataset.cf === 'pts') {
+      cardList[ci].pts = Number(e.target.value) || 0;
+      syncCardsToText();
     }
   });
 
@@ -608,7 +657,7 @@ export function initEditor() {
       const c = cardList[+pv.dataset.cpreview];
       if (!c || !c.q.trim()) { toast('먼저 문제를 입력해 주세요'); return; }
       const opts = c.isMc ? [c.a, c.w1, c.w2, c.w3, ...(c.extraWrong || [])].map(x => x.trim()).filter(Boolean) : null;
-      openQuestionPreview({ q: c.q, a: c.a, opts: opts && opts.length > 1 ? opts : null, explain: c.explain, img: c.img }, +pv.dataset.cpreview + 1);
+      openQuestionPreview({ q: c.q, a: c.a, opts: opts && opts.length > 1 ? opts : null, explain: c.explain, img: c.img, pts: c.pts }, +pv.dataset.cpreview + 1);
       return;
     }
     const ao = e.target.closest('[data-caddopt]');
@@ -675,7 +724,7 @@ export function initEditor() {
   };
 
   $('#ed-add-card').onclick = () => {
-    cardList.push({ q: '', a: '', isMc: true, w1: '', w2: '', w3: '', extraWrong: [], explain: '', img: '', selected: false });
+    cardList.push({ q: '', a: '', isMc: true, w1: '', w2: '', w3: '', extraWrong: [], explain: '', img: '', listen: '', pts: 0, selected: false });
     renderCardEditor();
     const last = $('#ed-cards .ed-card:last-child input[data-cf="q"]');
     if (last) { last.focus(); last.scrollIntoView({ block: 'nearest' }); }
@@ -692,10 +741,7 @@ export function initEditor() {
   });
 
   window.addEventListener('beforeunload', e => {
-    if ($('#screen-editor').classList.contains('active') && isEdDirty()) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
+    if ($('#screen-editor').classList.contains('active') && isEdDirty()) { e.preventDefault(); e.returnValue = ''; }
   });
 
   $('#ed-status').addEventListener('click', e => {
@@ -775,10 +821,7 @@ export function initEditor() {
       const copyName = (base + ' (복사본)').slice(0, 30);
       const sets = savedSets();
       sets.push({ id: 'set_' + Date.now().toString(36), name: copyName, text: s.text });
-      if (!store('bq_sets', sets)) {
-        toast('⚠️ 저장 공간이 부족해 복제하지 못했어요');
-        return;
-      }
+      if (!store('bq_sets', sets)) { toast('⚠️ 저장 공간이 부족해 복제하지 못했어요'); return; }
       renderSetList();
       sfx('coin');
       toast(`📋 “${copyName}”으로 복제했어요`);
@@ -790,9 +833,7 @@ export function initEditor() {
       show('setup');
       toast('문제 세트를 골랐어요!');
     }
-    if (b.dataset.analytics && actions.openAnalyticsModal) {
-      actions.openAnalyticsModal(b.dataset.analytics, b.dataset.atitle || '');
-    }
+    if (b.dataset.analytics && actions.openAnalyticsModal) actions.openAnalyticsModal(b.dataset.analytics, b.dataset.atitle || '');
     if (b.dataset.del) {
       const s = getSet(b.dataset.del);
       if (!(await confirmModal({ title: `“${s.name}” 세트를 삭제할까요?`, desc: '삭제한 문제 세트는 다시 복구할 수 없어요.', okText: '삭제하기', danger: true }))) return;
@@ -803,9 +844,10 @@ export function initEditor() {
     }
   });
 
-  $('#ed-export').onclick = () => {
-    const text = $('#ed-text').value;
-    if (!text.trim()) { toast('내보낼 내용이 없어요'); return; }
+  $('#ed-export').onclick = async () => {
+    const raw = $('#ed-text').value;
+    if (!raw.trim()) { toast('내보낼 내용이 없어요'); return; }
+    const text = await inlineIdbImagesInText(raw);
     const name = ($('#ed-name').value.trim() || '문제세트').replace(/[\\/:*?"<>|]/g, '_');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
@@ -814,6 +856,25 @@ export function initEditor() {
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   };
+  if ($('#ed-csv-tpl')) {
+    $('#ed-csv-tpl').onclick = () => {
+      const rows = [
+        ['문제', '정답', '오답1', '오답2', '오답3', '해설 또는 배점'],
+        ['식물이 햇빛으로 양분을 만드는 과정은?', '광합성', '증산 작용', '호흡', '소화', '해설: 잎에서 양분을 만들어요'],
+        ['우리 몸에서 피를 온몸으로 보내는 기관은?', '심장', '', '', '', '배점: 20'],
+        ['지구가 스스로 한 바퀴 도는 운동은 자전이다.', 'O', 'X', '', '', '']
+      ];
+      const escCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const csv = '\uFEFF' + rows.map(r => r.map(escCsv).join(',')).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = '빙고퀴즈_문제입력_양식.csv';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      toast('📊 엑셀(.csv) 양식을 내려받았어요');
+    };
+  }
   $('#ed-import').onclick = () => $('#ed-file').click();
 
   $('#ed-print').onclick = () => {

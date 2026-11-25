@@ -2,6 +2,8 @@ import { TEAM_PRESETS, DEFAULT_SETTINGS, AI_CONF } from '../data/sets.js';
 import { computeStanding, score } from '../core/engine.js';
 import { load, store, loadSoloStats, saveSoloStats } from '../utils/storage.js';
 import { setBgmStyle, stopSpeak } from '../utils/audio.js';
+import { isIdbImageRef, getCachedIdbImage, hydrateImages } from '../utils/imageStore.js';
+import { isSafeImageUrl } from '../core/questions.js';
 
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];
@@ -63,6 +65,22 @@ export function applyMotion(reduce) {
   document.body.classList.toggle('reduce-motion', !!reduce);
 }
 
+export function applyBigScreen(on) {
+  document.body.classList.toggle('big-screen', !!on);
+}
+
+export function renderImgTag(src, cls = 'q-img', alt = '문제 그림', extraStyle = '') {
+  const s = String(src || '').trim();
+  if (!s || !isSafeImageUrl(s)) return '';
+  const st = extraStyle ? ` style="${extraStyle}"` : '';
+  if (isIdbImageRef(s)) {
+    const cached = getCachedIdbImage(s);
+    if (cached) return `<img class="${cls}"${st} src="${esc(cached)}" data-idb-src="${esc(s)}" alt="${esc(alt)}" onerror="this.style.display='none'">`;
+    return `<img class="${cls}"${st} data-idb-src="${esc(s)}" alt="${esc(alt)}" style="${extraStyle ? extraStyle + ';' : ''}display:none">`;
+  }
+  return `<img class="${cls}"${st} src="${esc(s)}" alt="${esc(alt)}" onerror="this.style.display='none'">`;
+}
+
 export function drawBg(theme = 'forest') {
   const bg = $('#bg');
   if (!bg) return;
@@ -113,6 +131,7 @@ export function show(id) {
   if (id === 'title') {
     applyTheme(app.setup.settings.theme);
     applyMotion(app.setup.settings.reduceMotion);
+    applyBigScreen(app.setup.settings.bigScreen);
     if (actions.refreshTitle) actions.refreshTitle();
   }
   if (id === 'game' && actions.renderBingoLines) requestAnimationFrame(actions.renderBingoLines);
@@ -278,6 +297,7 @@ export function openModal(html, size = '', type = 'generic', onClose = null) {
   b.className = size;
   b.innerHTML = html;
   $('#modal').classList.add('show');
+  hydrateImages(b);
   b.scrollTop = 0;
   const firstFocus = b.querySelector('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[href]');
   if (firstFocus && firstFocus.offsetParent !== null) firstFocus.focus();

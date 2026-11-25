@@ -130,17 +130,46 @@ export async function fetchClassAnalytics(rawCode) {
   };
 }
 
-export async function fetchPublicLibrary({ subject = 'all', query = '' } = {}) {
+export async function hashPin(pin) {
+  const clean = String(pin || '').trim();
+  if (!clean) return '';
   try {
-    let path = 'bingo_public_library?select=id,title,subject,grade,author_alias,content,question_count,created_at&order=created_at.desc&limit=60';
-    if (subject && subject !== 'all') path += `&subject=eq.${encodeURIComponent(subject)}`;
-    const res = await sbFetch(path);
+    if (typeof crypto !== 'undefined' && crypto.subtle && typeof TextEncoder !== 'undefined') {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('bingo-pin:' + clean));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {}
+  let h = 2166136261;
+  for (let i = 0; i < clean.length; i++) {
+    h ^= clean.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return 'fnv_' + (h >>> 0).toString(16);
+}
+
+export async function fetchPublicLibrary({ subject = 'all', query = '', sort = 'recent' } = {}) {
+  try {
+    const extCols = 'id,title,subject,grade,author_alias,content,question_count,likes_count,downloads_count,report_count,created_at';
+    const baseCols = 'id,title,subject,grade,author_alias,content,question_count,created_at';
+    const makePath = cols => {
+      let path = `bingo_public_library?select=${cols}&order=created_at.desc&limit=80`;
+      if (subject && subject !== 'all') path += `&subject=eq.${encodeURIComponent(subject)}`;
+      return path;
+    };
+    let res = await sbFetch(makePath(extCols));
+    if (res.status === 400) res = await sbFetch(makePath(baseCols));
     if (!res.ok) return { items: [], cloudAvailable: false };
     let rows = await res.json();
     if (!Array.isArray(rows)) rows = [];
+    rows = rows.filter(r => (Number(r.report_count) || 0) < 5);
     const q = String(query || '').trim().toLowerCase();
     if (q) {
       rows = rows.filter(r => `${r.title} ${r.subject} ${r.grade} ${r.author_alias}`.toLowerCase().includes(q));
+    }
+    if (sort === 'popular') {
+      rows.sort((a, b) => ((Number(b.likes_count) || 0) - (Number(a.likes_count) || 0)) || String(b.created_at).localeCompare(String(a.created_at)));
+    } else if (sort === 'downloads') {
+      rows.sort((a, b) => ((Number(b.downloads_count) || 0) - (Number(a.downloads_count) || 0)) || String(b.created_at).localeCompare(String(a.created_at)));
     }
     return { items: rows, cloudAvailable: true };
   } catch {
@@ -148,8 +177,9 @@ export async function fetchPublicLibrary({ subject = 'all', query = '' } = {}) {
   }
 }
 
-export async function publishToPublicLibrary({ title, subject = '기타', grade = '전학년', authorAlias = '익명 선생님', content, questionCount }) {
-  const payload = {
+export async function publishToPublicLibrary({ title, subject = '기타', grade = '전학년', authorAlias = '익명 선생님', content, questionCount, editPin = '' }) {
+  const pinHash = editPin ? await hashPin(editPin) : '';
+  const basePayload = {
     title: String(title || '').trim().slice(0, 60) || '공유 문제 세트',
     subject: String(subject || '기타').trim().slice(0, 20) || '기타',
     grade: String(grade || '전학년').trim().slice(0, 20) || '전학년',
@@ -157,12 +187,49 @@ export async function publishToPublicLibrary({ title, subject = '기타', grade 
     content: String(content || '').trim().slice(0, 40000),
     question_count: Math.max(1, Math.min(200, Number(questionCount) || 1))
   };
-  const res = await sbFetch('bingo_public_library', {
+  const payload = pinHash ? { ...basePayload, edit_pin_hash: pinHash } : basePayload;
+  let res = await sbFetch('bingo_public_library', {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
     body: JSON.stringify(payload)
   });
+  if (res.status === 400 && pinHash) {
+    res = await sbFetch('bingo_public_library', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(basePayload)
+    });
+  }
   if (!res.ok) throw new Error(`Publish failed (${res.status})`);
   const rows = await res.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : payload;
+}
+
+export async function interactPublicLibrary(id, action) {
+  if (!id || !['like', 'download', 'report'].includes(action)) return false;
+  try {
+    const res = await sbFetch('rpc/bingo_lib_interact', {
+      method: 'POST',
+      body: JSON.stringify({ p_id: id, p_action: action })
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function deletePublicLibraryItem(id, editPin) {
+  if (!id || !editPin) return false;
+  const pinHash = await hashPin(editPin);
+  try {
+    const res = await sbFetch('rpc/bingo_lib_delete', {
+      method: 'POST',
+      body: JSON.stringify({ p_id: id, p_pin_hash: pinHash })
+    });
+    if (!res.ok) return false;
+    const ok = await res.json();
+    return !!ok;
+  } catch {
+    return false;
+  }
 }
