@@ -87,6 +87,60 @@ export function parseQuestions(text) {
   return { list, errors };
 }
 
+export function cleanupQuestionsText(rawText) {
+  const inputLines = String(rawText || '').split(/\r?\n/);
+  const cleanedLines = [];
+  let fixedLines = 0;
+
+  for (const raw of inputLines) {
+    let line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith('```')) { fixedLines++; continue; }
+    if (/^\|?[\s:-]+(\|[\s:-]+)+\|?$/.test(line) || /^[-:|\s\t]+$/.test(line)) { fixedLines++; continue; }
+
+    const orig = line;
+    line = line
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/^\|\s*/, '')
+      .replace(/\s*\|$/, '');
+
+    if (!line.includes('|')) {
+      if (line.includes('｜')) line = line.replace(/｜/g, '|');
+      else if (line.includes('\t')) line = line.replace(/\t+/g, ' | ');
+    }
+
+    if (line.includes('|')) {
+      const cols = line.split('|').map((c, idx) => {
+        let cell = c.replace(/\s{2,}/g, ' ').trim();
+        if (idx === 0) {
+          cell = cell.replace(/^(?:[-*•]\s*|\d+\s*[.)]\s*|Q\s*\d*\s*[.:)]\s*|문제\s*\d+\s*[.:)]\s*)/i, '').trim();
+        }
+        return cell;
+      }).filter(Boolean);
+      if (cols.length) line = cols.join(' | ');
+    } else {
+      line = line.replace(/\s{2,}/g, ' ').trim();
+    }
+
+    if (line !== orig) fixedLines++;
+    if (line) cleanedLines.push(line);
+  }
+
+  const normalized = cleanedLines.join('\n');
+  const parsed = parseQuestions(normalized);
+  const formatted = parsed.errors.length === 0 && parsed.list.length > 0
+    ? serializeQuestions(parsed.list)
+    : normalized;
+
+  return {
+    text: formatted,
+    fixedLines,
+    count: parsed.list.length,
+    errorCount: parsed.errors.length
+  };
+}
+
 export function serializeQuestions(list) {
   const clean = s => String(s || '').replace(/\r?\n/g, ' ').replace(/\|/g, '｜').trim();
   return list.map(item => {

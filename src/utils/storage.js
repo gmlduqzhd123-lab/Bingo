@@ -129,3 +129,79 @@ export function addHallOfFameEntry(entry) {
 export function clearHallOfFame() {
   return store('bq_hall_of_fame', []);
 }
+
+export function getStorageUsage(maxBytes = 5 * 1024 * 1024) {
+  let usedBytes = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i) || '';
+      const v = localStorage.getItem(k) || '';
+      usedBytes += (k.length + v.length) * 2;
+    }
+  } catch {}
+  const maxKB = Math.max(1, Math.round(maxBytes / 1024));
+  const usedKB = Math.round(usedBytes / 1024);
+  const pct = Math.min(100, Math.round((usedBytes / maxBytes) * 100));
+  return { usedBytes, maxBytes, usedKB, maxKB, pct };
+}
+
+export function wrongBankKey(qText) {
+  return String(qText || '').toLowerCase().replace(/\s+/g, '');
+}
+
+export function loadWrongBank() {
+  const list = load('bq_wrong_bank', []);
+  return Array.isArray(list) ? list : [];
+}
+
+export function recordWrongQuestion(qObj) {
+  if (!qObj || !qObj.q || !qObj.a) return loadWrongBank();
+  const key = wrongBankKey(qObj.q);
+  if (!key) return loadWrongBank();
+  const list = loadWrongBank();
+  const now = new Date().toISOString();
+  const idx = list.findIndex(x => x.key === key);
+  const nextItem = {
+    key,
+    q: String(qObj.q).trim(),
+    a: String(qObj.a).trim(),
+    opts: Array.isArray(qObj.opts) && qObj.opts.length > 1 ? [...qObj.opts] : null,
+    explain: qObj.explain ? String(qObj.explain).trim() : '',
+    img: qObj.img ? String(qObj.img).trim() : '',
+    misses: idx >= 0 ? (Number(list[idx].misses) || 1) + 1 : 1,
+    lastMissedAt: now
+  };
+  if (idx >= 0) list[idx] = nextItem;
+  else list.unshift(nextItem);
+  list.sort((a, b) => (b.misses - a.misses) || String(b.lastMissedAt).localeCompare(String(a.lastMissedAt)));
+  const trimmed = list.slice(0, 100);
+  store('bq_wrong_bank', trimmed);
+  return trimmed;
+}
+
+export function resolveWrongQuestion(qText, clearImmediately = false) {
+  const key = wrongBankKey(qText);
+  if (!key) return { cleared: false, remaining: loadWrongBank().length };
+  const list = loadWrongBank();
+  const idx = list.findIndex(x => x.key === key);
+  if (idx < 0) return { cleared: false, remaining: list.length };
+  let cleared = false;
+  if (clearImmediately || (Number(list[idx].misses) || 1) <= 1) {
+    list.splice(idx, 1);
+    cleared = true;
+  } else {
+    list[idx].misses = (Number(list[idx].misses) || 1) - 1;
+  }
+  store('bq_wrong_bank', list);
+  return { cleared, remaining: list.length };
+}
+
+export function removeWrongQuestion(key) {
+  const list = loadWrongBank().filter(x => x.key !== key);
+  store('bq_wrong_bank', list);
+  return list;
+}
+
+export function clearWrongBank() {
+  return store('bq_wrong_bank', []);
+}
